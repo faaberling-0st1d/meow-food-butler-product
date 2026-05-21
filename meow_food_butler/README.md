@@ -9,3 +9,5 @@ Name the file with the convention:
 - `repositories`: `foo_repo.dart`
 - `view_models`: `foo_vm.dart`
 
+## Terminology
+- Experience := a "record" in our prototype
