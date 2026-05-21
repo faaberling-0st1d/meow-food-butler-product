@@ -1,4 +1,5 @@
 import 'restaurant_info.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Experience {
   String? id;
