@@ -1,7 +1,6 @@
-import 'restaurant_info.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'food_card.dart';
 
-class Experience {
+class ExperienceCard {
   String? id;
   final String? originalURL;
   final List<String?> AITags;
@@ -11,7 +10,7 @@ class Experience {
   Timestamp get createdTime => _createdTime ?? Timestamp.now();
   final bool isDone;
 
-  Experience({
+  ExperienceCard({
     this.id,
     this.originalURL,
     required this.AITags,
@@ -21,8 +20,8 @@ class Experience {
     this.isDone = false,
   }) : _createdTime = createdTime;
 
-  factory Experience.fromMap(Map<String, dynamic> map, String id) {
-    return Experience._(
+  factory ExperienceCard.fromMap(Map<String, dynamic> map, String id) {
+    return ExperienceCard._(
     );
   }
 
