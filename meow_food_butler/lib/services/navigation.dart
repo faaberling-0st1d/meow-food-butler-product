@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-// Import your mode views here
-// import 'package:food_butler/views/map_mode.dart';
-// import 'package:food_butler/views/chat_mode.dart';
-// import 'package:food_butler/views/saved_mode.dart';
+// Mode View Screens
+import 'package:meow_food_butler/views/map/main_map_screen.dart';
+import 'package:meow_food_butler/views/chat/chat_screen.dart';
+import 'package:meow_food_butler/views/saved/saved_screen.dart';
 
 /// Global navigator keys for handling context-less actions if required
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -39,7 +39,7 @@ class AppNavigation {
               GoRoute(
                 path: mapPath,
                 pageBuilder: (context, state) => const NoTransitionPage(
-                  child: DummyPlaceholderScaffold(title: 'Map View Workspace', color: Colors.blueGrey),
+                  child: MainMapScreen(),
                 ),
               ),
             ],
@@ -52,7 +52,7 @@ class AppNavigation {
               GoRoute(
                 path: chatPath,
                 pageBuilder: (context, state) => const NoTransitionPage(
-                  child: DummyPlaceholderScaffold(title: 'AI Chat Core Engine', color: Colors.indigo),
+                  child: ChatScreen(),
                 ),
               ),
             ],
@@ -65,7 +65,7 @@ class AppNavigation {
               GoRoute(
                 path: savedPath,
                 pageBuilder: (context, state) => const NoTransitionPage(
-                  child: DummyPlaceholderScaffold(title: 'Saved Places Dossier', color: Colors.teal),
+                  child: SavedScreen(),
                 ),
               ),
             ],
