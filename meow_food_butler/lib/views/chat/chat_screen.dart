@@ -117,7 +117,9 @@ class _ChatState extends State<Chat> {
   }
 }
 
-/// A single Telegram-style chat bubble.
+/// A single chat bubble, styled to match the outlined-box texture of the
+/// `_ExperienceCardTile` on the Saved screen: a flat fill with a thin
+/// `outlineVariant` border and rounded corners.
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({required this.text, required this.isMe});
 
@@ -127,11 +129,13 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    // Warm container tones aligned with the card palette, rather than the
+    // saturated `primary`/`surfaceContainerHighest` used before.
     final bubbleColor = isMe
-        ? colorScheme.primary
-        : colorScheme.surfaceContainerHighest;
+        ? colorScheme.primaryContainer
+        : colorScheme.surfaceContainerLow;
     final textColor = isMe
-        ? colorScheme.onPrimary
+        ? colorScheme.onPrimaryContainer
         : colorScheme.onSurface;
 
     const radius = Radius.circular(18);
@@ -149,10 +153,12 @@ class _MessageBubble extends StatelessWidget {
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: bubbleColor,
           borderRadius: borderRadius,
+          // The outlined box, same as the card's RoundedRectangleBorder side.
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Text(
           text,
@@ -184,8 +190,9 @@ class _Composer extends StatelessWidget {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: colorScheme.surface,
+                  color: colorScheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: colorScheme.outlineVariant),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: TextField(
