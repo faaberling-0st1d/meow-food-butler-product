@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:meow_food_butler/models/experience_card.dart';
 import 'package:meow_food_butler/view_models/saved_view_model.dart';
@@ -19,6 +21,7 @@ class ExperienceDetailScreen extends StatelessWidget {
       useSafeArea: true,
       builder: (sheetContext) => ExperienceEntrySheet(
         initialExperience: experience,
+        savedPlaceSuggestions: viewModel.experiences,
         onSave: (savedExperience, photos) =>
             viewModel.updateExperience(savedExperience, newPhotos: photos),
       ),
@@ -69,9 +72,8 @@ class ExperienceDetailScreen extends StatelessWidget {
         }
 
         final colorScheme = Theme.of(context).colorScheme;
-        final date = experience.createdTime.toDate();
-        final dateText =
-            '${date.year}/${date.month}/${date.day} ${_formatTime(date)}';
+        final dateText = _formatTaiwanDateTime(experience.createdTime.toDate());
+        final photoSources = _photoSourcesFor(experience);
 
         return Scaffold(
           appBar: AppBar(
@@ -135,35 +137,24 @@ class ExperienceDetailScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              if (experience.photoUrls.isNotEmpty ||
-                  experience.photoPaths.isNotEmpty) ...[
+              if (photoSources.isNotEmpty) ...[
                 SizedBox(
                   height: 180,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    itemCount: experience.photoUrls.isNotEmpty
-                        ? experience.photoUrls.length
-                        : experience.photoPaths.length,
+                    itemCount: photoSources.length,
                     separatorBuilder: (context, index) =>
                         const SizedBox(width: 12),
                     itemBuilder: (context, index) {
-                      final photoUrl = index < experience.photoUrls.length
-                          ? experience.photoUrls[index]
-                          : null;
-                      final photoPath = index < experience.photoPaths.length
-                          ? experience.photoPaths[index]
-                          : null;
+                      final source = photoSources[index];
 
                       return ExperiencePhoto(
                         key: ValueKey(
-                          '${experience.id}-$index-${photoPath ?? photoUrl ?? 'empty'}',
+                          '${experience.id}-$index-${source.photoPath ?? source.photoUrl ?? 'empty'}',
                         ),
-                        experience: experience.copyWith(
-                          photoUrls: photoUrl == null ? const [] : [photoUrl],
-                          photoPaths: photoPath == null
-                              ? const []
-                              : [photoPath],
-                        ),
+                        experience: experience,
+                        photoUrl: source.photoUrl,
+                        photoPath: source.photoPath,
                         width: 180,
                         height: 180,
                         borderRadius: 18,
@@ -386,8 +377,54 @@ class _WidthClipper extends CustomClipper<Rect> {
   bool shouldReclip(_WidthClipper oldClipper) => oldClipper.factor != factor;
 }
 
-String _formatTime(DateTime date) {
-  final hour = date.hour.toString().padLeft(2, '0');
-  final minute = date.minute.toString().padLeft(2, '0');
-  return '$hour:$minute';
+String _formatTaiwanDateTime(DateTime date) {
+  final taiwanTime = date.toUtc().add(const Duration(hours: 8));
+  final year = taiwanTime.year.toString();
+  final month = taiwanTime.month.toString().padLeft(2, '0');
+  final day = taiwanTime.day.toString().padLeft(2, '0');
+  final hour = taiwanTime.hour.toString().padLeft(2, '0');
+  final minute = taiwanTime.minute.toString().padLeft(2, '0');
+  return '$year/$month/$day $hour:$minute';
+}
+
+List<_PhotoSource> _photoSourcesFor(ExperienceCard experience) {
+  final id = experience.id;
+  final count = math.max(
+    experience.photoUrls.length,
+    experience.photoPaths.length,
+  );
+  final sources = <_PhotoSource>[];
+
+  for (var index = 0; index < count; index += 1) {
+    final photoUrl = index < experience.photoUrls.length
+        ? experience.photoUrls[index]
+        : null;
+    final photoPath = index < experience.photoPaths.length
+        ? experience.photoPaths[index]
+        : null;
+
+    if (id != null &&
+        !_photoBelongsToExperience(photoUrl, id) &&
+        !_photoBelongsToExperience(photoPath, id)) {
+      continue;
+    }
+
+    sources.add(_PhotoSource(photoUrl: photoUrl, photoPath: photoPath));
+  }
+
+  return sources;
+}
+
+bool _photoBelongsToExperience(String? photo, String id) {
+  if (photo == null) return false;
+  final decoded = Uri.decodeFull(photo);
+  return decoded.contains('/experiences/$id/') ||
+      decoded.contains('experiences/$id/');
+}
+
+class _PhotoSource {
+  final String? photoUrl;
+  final String? photoPath;
+
+  const _PhotoSource({required this.photoUrl, required this.photoPath});
 }

@@ -10,12 +10,14 @@ import 'package:meow_food_butler/services/nearby_places_service.dart';
 
 class ExperienceEntrySheet extends StatefulWidget {
   final ExperienceCard? initialExperience;
+  final List<ExperienceCard> savedPlaceSuggestions;
   final Future<void> Function(ExperienceCard experience, List<XFile> photos)
   onSave;
 
   const ExperienceEntrySheet({
     super.key,
     this.initialExperience,
+    this.savedPlaceSuggestions = const [],
     required this.onSave,
   });
 
@@ -105,6 +107,14 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
     if (_isApplyingPlaceSelection) return;
 
     _placeSearchDebounce?.cancel();
+    if (_placeId != null || _placeAddress != null || _latitude != null) {
+      setState(() {
+        _placeId = null;
+        _placeAddress = null;
+        _latitude = null;
+        _longitude = null;
+      });
+    }
 
     final query = _placeController.text.trim();
     if (query.length < 2) {
@@ -127,7 +137,9 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
 
     setState(() => _isSearchingPlaces = true);
     try {
-      final results = await _nearbyPlacesService.searchRestaurants(query);
+      final savedResults = _savedPlaceResults(query);
+      final googleResults = await _nearbyPlacesService.searchRestaurants(query);
+      final results = _mergePlaceResults(savedResults, googleResults);
       if (!mounted || _placeController.text.trim() != query) return;
       setState(() => _placeSearchResults = results);
     } catch (_) {
@@ -152,6 +164,59 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
     });
     _isApplyingPlaceSelection = false;
     FocusScope.of(context).unfocus();
+  }
+
+  List<NearbyPlace> _savedPlaceResults(String query) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.length < 2) return const [];
+
+    final results = <NearbyPlace>[];
+    final seenNames = <String>{};
+
+    for (final experience in widget.savedPlaceSuggestions) {
+      final name = experience.placeTitle?.trim();
+      if (name == null || name.isEmpty) continue;
+
+      final address = experience.placeAddress?.trim();
+      final searchableText = [
+        name,
+        address,
+      ].whereType<String>().join(' ').toLowerCase();
+      if (!searchableText.contains(normalizedQuery)) continue;
+
+      final key = '$name|${address ?? ''}'.toLowerCase();
+      if (!seenNames.add(key)) continue;
+
+      results.add(
+        NearbyPlace(
+          placeId: experience.placeId ?? '',
+          name: name,
+          address: address,
+          latitude: experience.latitude,
+          longitude: experience.longitude,
+        ),
+      );
+    }
+
+    return results;
+  }
+
+  List<NearbyPlace> _mergePlaceResults(
+    List<NearbyPlace> savedResults,
+    List<NearbyPlace> googleResults,
+  ) {
+    final merged = <NearbyPlace>[];
+    final seen = <String>{};
+
+    for (final place in [...savedResults, ...googleResults]) {
+      final key = place.placeId.isNotEmpty
+          ? place.placeId
+          : '${place.name}|${place.address ?? ''}'.toLowerCase();
+      if (!seen.add(key)) continue;
+      merged.add(place);
+    }
+
+    return merged;
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
@@ -388,16 +453,24 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
     setState(() => _isSubmitting = true);
 
     final initial = widget.initialExperience;
+    final placeTitle = _placeController.text.trim().isEmpty
+        ? 'Unknown Food Spot'
+        : _placeController.text.trim();
+    final region = _regionFromLocationText([
+      _placeAddress,
+      placeTitle,
+      initial?.region,
+    ]);
+
     try {
       await widget.onSave(
         ExperienceCard(
           id: initial?.id,
           foodCardId: initial?.foodCardId,
           placeId: _placeId,
-          placeTitle: _placeController.text.trim().isEmpty
-              ? 'Unknown Food Spot'
-              : _placeController.text.trim(),
+          placeTitle: placeTitle,
           placeAddress: _placeAddress,
+          region: region,
           latitude: _latitude,
           longitude: _longitude,
           originalURL: initial?.originalURL,
@@ -742,6 +815,45 @@ String? _joinLocationParts(List<String> values) {
     if (!uniqueValues.contains(value)) uniqueValues.add(value);
   }
   return uniqueValues.isEmpty ? null : uniqueValues.join(', ');
+}
+
+String? _regionFromLocationText(List<String?> values) {
+  final text = values
+      .whereType<String>()
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .join(' ')
+      .replaceAll('臺', '台');
+  if (text.isEmpty) return null;
+
+  const regionPatterns = <String, List<String>>{
+    '台北': ['台北市', '台北'],
+    '新北': ['新北市', '新北'],
+    '桃園': ['桃園市', '桃園'],
+    '新竹': ['新竹市', '新竹縣', '新竹'],
+    '苗栗': ['苗栗縣', '苗栗'],
+    '台中': ['台中市', '台中'],
+    '彰化': ['彰化縣', '彰化'],
+    '南投': ['南投縣', '南投'],
+    '雲林': ['雲林縣', '雲林'],
+    '嘉義': ['嘉義市', '嘉義縣', '嘉義'],
+    '台南': ['台南市', '台南'],
+    '高雄': ['高雄市', '高雄'],
+    '屏東': ['屏東縣', '屏東'],
+    '宜蘭': ['宜蘭縣', '宜蘭'],
+    '花蓮': ['花蓮縣', '花蓮'],
+    '台東': ['台東縣', '台東'],
+    '基隆': ['基隆市', '基隆'],
+    '澎湖': ['澎湖縣', '澎湖'],
+    '金門': ['金門縣', '金門'],
+    '連江': ['連江縣', '馬祖', '連江'],
+  };
+
+  for (final entry in regionPatterns.entries) {
+    if (entry.value.any(text.contains)) return entry.key;
+  }
+
+  return null;
 }
 
 class _Header extends StatelessWidget {

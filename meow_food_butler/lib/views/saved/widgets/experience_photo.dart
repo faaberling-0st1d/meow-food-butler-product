@@ -4,6 +4,8 @@ import 'package:meow_food_butler/models/experience_card.dart';
 
 class ExperiencePhoto extends StatelessWidget {
   final ExperienceCard experience;
+  final String? photoUrl;
+  final String? photoPath;
   final double width;
   final double height;
   final double borderRadius;
@@ -12,6 +14,8 @@ class ExperiencePhoto extends StatelessWidget {
   const ExperiencePhoto({
     super.key,
     required this.experience,
+    this.photoUrl,
+    this.photoPath,
     required this.width,
     required this.height,
     required this.borderRadius,
@@ -31,12 +35,10 @@ class ExperiencePhoto extends StatelessWidget {
       );
     }
 
-    final photoUrl = experience.photoUrls.isEmpty
-        ? null
-        : experience.photoUrls.first;
-    final photoPath = experience.photoPaths.isEmpty
-        ? null
-        : experience.photoPaths.first;
+    final resolvedPhotoUrl =
+        photoUrl ?? _firstPhotoForExperience(experience.photoUrls);
+    final resolvedPhotoPath =
+        photoPath ?? _firstPhotoForExperience(experience.photoPaths);
 
     Widget imageForUrl(String url, {Widget? fallback}) {
       return Image.network(
@@ -45,34 +47,35 @@ class ExperiencePhoto extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
-        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
         errorBuilder: (context, error, stackTrace) {
           return fallback ?? fallbackIcon(Icons.broken_image_outlined);
         },
       );
     }
 
-    final imageKey = photoPath ?? photoUrl ?? 'empty-${experience.id}';
+    final imageKey =
+        resolvedPhotoPath ?? resolvedPhotoUrl ?? 'empty-${experience.id}';
 
     return ClipRRect(
       key: ValueKey(imageKey),
       borderRadius: BorderRadius.circular(borderRadius),
-      child: photoUrl != null
+      child: resolvedPhotoUrl != null
           ? imageForUrl(
-              photoUrl,
-              fallback: photoPath == null
+              resolvedPhotoUrl,
+              fallback: resolvedPhotoPath == null
                   ? null
                   : _StoragePathImage(
-                      path: photoPath,
+                      path: resolvedPhotoPath,
                       width: width,
                       height: height,
                       fit: fit,
                       fallback: fallbackIcon(Icons.broken_image_outlined),
                     ),
             )
-          : photoPath != null
+          : resolvedPhotoPath != null
           ? _StoragePathImage(
-              path: photoPath,
+              path: resolvedPhotoPath,
               width: width,
               height: height,
               fit: fit,
@@ -80,6 +83,25 @@ class ExperiencePhoto extends StatelessWidget {
             )
           : fallbackIcon(Icons.restaurant),
     );
+  }
+
+  String? _firstPhotoForExperience(List<String> photos) {
+    if (photos.isEmpty) return null;
+
+    final id = experience.id;
+    if (id == null) return photos.first;
+
+    for (final photo in photos) {
+      if (_photoBelongsToExperience(photo, id)) return photo;
+    }
+
+    return null;
+  }
+
+  bool _photoBelongsToExperience(String photo, String id) {
+    final decoded = Uri.decodeFull(photo);
+    return decoded.contains('/experiences/$id/') ||
+        decoded.contains('experiences/$id/');
   }
 }
 
@@ -119,7 +141,7 @@ class _StoragePathImage extends StatelessWidget {
           width: width,
           height: height,
           fit: fit,
-          webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+          webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
           errorBuilder: (context, error, stackTrace) => fallback,
         );
       },

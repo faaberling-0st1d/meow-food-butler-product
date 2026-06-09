@@ -8,6 +8,7 @@ class ExperienceCard {
   final String? placeId; // Google Places ID when the user selects a restaurant
   final String? placeTitle; // User-facing restaurant/place name
   final String? placeAddress; // Human-readable address from device location
+  final String? region; // City/county used for recommendation filters
   final double? latitude;
   final double? longitude;
   final String? originalURL; // Source Instagram link (if imported)
@@ -27,6 +28,7 @@ class ExperienceCard {
     this.placeId,
     this.placeTitle,
     this.placeAddress,
+    this.region,
     this.latitude,
     this.longitude,
     this.originalURL,
@@ -50,6 +52,7 @@ class ExperienceCard {
       placeId: _readLocationString(map, 'placeId') ?? map['placeId'] as String?,
       placeTitle: map['placeTitle'] as String?,
       placeAddress: _readLocationString(map, 'address'),
+      region: map['region'] as String? ?? _readLocationString(map, 'region'),
       latitude:
           _readLocationDouble(map, 'latitude') ??
           _readLocationDouble(map, 'lat'),
@@ -80,12 +83,14 @@ class ExperienceCard {
       'foodCardId': foodCardId,
       'placeId': placeId,
       'placeTitle': placeTitle,
+      'region': region,
       'location': latitude == null || longitude == null
           ? null
           : {
               'placeId': placeId,
               'name': placeTitle,
               'address': placeAddress,
+              'region': region,
               'latitude': latitude,
               'longitude': longitude,
             },
@@ -106,6 +111,7 @@ class ExperienceCard {
     String? placeId,
     String? placeTitle,
     String? placeAddress,
+    String? region,
     double? latitude,
     double? longitude,
     String? originalURL,
@@ -123,6 +129,7 @@ class ExperienceCard {
       placeId: placeId ?? this.placeId,
       placeTitle: placeTitle ?? this.placeTitle,
       placeAddress: placeAddress ?? this.placeAddress,
+      region: region ?? this.region,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       originalURL: originalURL ?? this.originalURL,
@@ -146,6 +153,7 @@ class ExperienceCard {
         other.placeId == placeId &&
         other.placeTitle == placeTitle &&
         other.placeAddress == placeAddress &&
+        other.region == region &&
         other.latitude == latitude &&
         other.longitude == longitude &&
         other.originalURL == originalURL &&
@@ -166,6 +174,7 @@ class ExperienceCard {
       placeId,
       placeTitle,
       placeAddress,
+      region,
       latitude,
       longitude,
       originalURL,
