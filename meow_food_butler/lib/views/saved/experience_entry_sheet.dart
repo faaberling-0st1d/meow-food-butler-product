@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:meow_food_butler/models/experience_card.dart';
+import 'package:meow_food_butler/services/nearby_places_service.dart';
 
 class ExperienceEntrySheet extends StatefulWidget {
   final ExperienceCard? initialExperience;
@@ -35,13 +38,19 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
   late final TextEditingController _noteController;
   late final TextEditingController _tagController;
   final ImagePicker _imagePicker = ImagePicker();
+  final NearbyPlacesService _nearbyPlacesService = NearbyPlacesService();
+  Timer? _placeSearchDebounce;
   late double _rating;
   late List<String> _photoUrls;
   final List<XFile> _pendingPhotos = [];
   late List<String> _tags;
+  List<NearbyPlace> _placeSearchResults = const [];
+  String? _placeId;
   String? _placeAddress;
   double? _latitude;
   double? _longitude;
+  bool _isSearchingPlaces = false;
+  bool _isApplyingPlaceSelection = false;
   bool _isLocating = false;
   bool _isSubmitting = false;
 
@@ -55,9 +64,11 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
     _placeController = TextEditingController(text: initial?.placeTitle ?? '');
     _noteController = TextEditingController(text: initial?.personalNote ?? '');
     _tagController = TextEditingController();
+    _placeController.addListener(_onPlaceQueryChanged);
     _rating = initial?.personalRating ?? 0;
     _photoUrls = List<String>.from(initial?.photoUrls ?? const []);
     _tags = List<String>.from(initial?.personalTags ?? const []);
+    _placeId = initial?.placeId;
     _placeAddress = initial?.placeAddress;
     _latitude = initial?.latitude;
     _longitude = initial?.longitude;
@@ -65,6 +76,7 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
 
   @override
   void dispose() {
+    _placeSearchDebounce?.cancel();
     _placeController.dispose();
     _noteController.dispose();
     _tagController.dispose();
@@ -87,6 +99,59 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
 
   void _removeTag(String tag) {
     setState(() => _tags.remove(tag));
+  }
+
+  void _onPlaceQueryChanged() {
+    if (_isApplyingPlaceSelection) return;
+
+    _placeSearchDebounce?.cancel();
+
+    final query = _placeController.text.trim();
+    if (query.length < 2) {
+      if (_placeSearchResults.isNotEmpty || _isSearchingPlaces) {
+        setState(() {
+          _placeSearchResults = const [];
+          _isSearchingPlaces = false;
+        });
+      }
+      return;
+    }
+
+    _placeSearchDebounce = Timer(const Duration(milliseconds: 500), () {
+      _searchPlaces(query);
+    });
+  }
+
+  Future<void> _searchPlaces(String query) async {
+    if (_isSubmitting) return;
+
+    setState(() => _isSearchingPlaces = true);
+    try {
+      final results = await _nearbyPlacesService.searchRestaurants(query);
+      if (!mounted || _placeController.text.trim() != query) return;
+      setState(() => _placeSearchResults = results);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _placeSearchResults = const []);
+    } finally {
+      if (mounted) setState(() => _isSearchingPlaces = false);
+    }
+  }
+
+  void _selectPlace(NearbyPlace place) {
+    _placeSearchDebounce?.cancel();
+    _isApplyingPlaceSelection = true;
+    setState(() {
+      _placeId = place.placeId.isEmpty ? null : place.placeId;
+      _placeAddress = place.address;
+      _latitude = place.latitude;
+      _longitude = place.longitude;
+      _placeSearchResults = const [];
+      _isSearchingPlaces = false;
+      _placeController.text = place.name;
+    });
+    _isApplyingPlaceSelection = false;
+    FocusScope.of(context).unfocus();
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
@@ -157,33 +222,40 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
         );
         if (placemarks.isNotEmpty) {
           final place = placemarks.first;
-          final streetParts = [
-            place.name,
-            place.street,
-          ].where((part) => part?.trim().isNotEmpty == true).cast<String>();
-          final areaParts = [
+          final streetParts = _locationParts([place.name, place.street]);
+          final areaParts = _locationParts([
             place.locality,
             place.administrativeArea,
             place.country,
-          ].where((part) => part?.trim().isNotEmpty == true).cast<String>();
+          ]);
 
           title = streetParts.isEmpty ? null : streetParts.join(', ');
-          address = [...streetParts, ...areaParts].join(', ');
+          address = _joinLocationParts([...streetParts, ...areaParts]);
         }
-      } on PlatformException {
+      } catch (_) {
         address = null;
       }
 
       if (!mounted) return;
-      setState(() {
-        _latitude = position.latitude;
-        _longitude = position.longitude;
-        _placeAddress = address;
-        _placeController.text =
+      final fallbackPlace = NearbyPlace(
+        placeId: '',
+        name:
             title ??
             address ??
-            '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
-      });
+            '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}',
+        address: address,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+
+      final selectedPlace = await _chooseNearbyRestaurant(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        fallbackPlace: fallbackPlace,
+      );
+
+      if (!mounted || selectedPlace == null) return;
+      _selectPlace(selectedPlace);
     } on _LocationException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -197,6 +269,110 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
     } finally {
       if (mounted) setState(() => _isLocating = false);
     }
+  }
+
+  Future<NearbyPlace?> _chooseNearbyRestaurant({
+    required double latitude,
+    required double longitude,
+    required NearbyPlace fallbackPlace,
+  }) async {
+    var places = <NearbyPlace>[];
+    var lookupMessage = 'Select the restaurant you are at.';
+
+    try {
+      places = await _nearbyPlacesService.restaurantsNear(
+        latitude: latitude,
+        longitude: longitude,
+      );
+      if (places.isEmpty && !_nearbyPlacesService.hasApiKey) {
+        lookupMessage =
+            'Places API key is not set. Using GPS location only for now.';
+      } else if (places.isEmpty) {
+        lookupMessage =
+            'No nearby restaurants found. Use GPS location instead.';
+      }
+    } on NearbyPlacesException catch (error) {
+      lookupMessage = '${error.message} Use GPS location instead.';
+    } catch (_) {
+      lookupMessage =
+          'Could not load nearby restaurants. Use GPS location instead.';
+    }
+
+    if (!mounted) return null;
+    return showModalBottomSheet<NearbyPlace>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Nearby restaurants',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                lookupMessage,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: places.length + 1,
+                  separatorBuilder: (context, index) =>
+                      Divider(color: colorScheme.outlineVariant),
+                  itemBuilder: (context, index) {
+                    if (index == places.length) {
+                      return ListTile(
+                        leading: const Icon(Icons.my_location),
+                        title: const Text('Use GPS location only'),
+                        subtitle: Text(
+                          fallbackPlace.address ?? fallbackPlace.name,
+                        ),
+                        onTap: () => Navigator.of(context).pop(fallbackPlace),
+                      );
+                    }
+
+                    final place = places[index];
+                    return ListTile(
+                      leading: const Icon(Icons.restaurant_outlined),
+                      title: Text(place.name),
+                      subtitle: place.address == null
+                          ? null
+                          : Text(place.address!),
+                      onTap: () => Navigator.of(context).pop(place),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _removePhotoUrl(String url) {
@@ -217,6 +393,7 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
         ExperienceCard(
           id: initial?.id,
           foodCardId: initial?.foodCardId,
+          placeId: _placeId,
           placeTitle: _placeController.text.trim().isEmpty
               ? 'Unknown Food Spot'
               : _placeController.text.trim(),
@@ -409,6 +586,11 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
                           ),
                         ),
                       ),
+                      _PlaceSearchResults(
+                        isSearching: _isSearchingPlaces,
+                        places: _placeSearchResults,
+                        onSelected: _selectPlace,
+                      ),
                       const SizedBox(height: 8),
                       FilledButton.tonalIcon(
                         onPressed: _isLocating ? null : _useCurrentLocation,
@@ -546,6 +728,22 @@ class _LocationException implements Exception {
   const _LocationException(this.message);
 }
 
+List<String> _locationParts(List<String?> values) {
+  return values
+      .map((value) => value?.trim())
+      .where((value) => value != null && value.isNotEmpty)
+      .cast<String>()
+      .toList();
+}
+
+String? _joinLocationParts(List<String> values) {
+  final uniqueValues = <String>[];
+  for (final value in values) {
+    if (!uniqueValues.contains(value)) uniqueValues.add(value);
+  }
+  return uniqueValues.isEmpty ? null : uniqueValues.join(', ');
+}
+
 class _Header extends StatelessWidget {
   final bool isEditing;
   final bool canSave;
@@ -605,6 +803,66 @@ class _Header extends StatelessWidget {
           label: Text(isSubmitting ? 'Saving...' : 'Save'),
         ),
       ],
+    );
+  }
+}
+
+class _PlaceSearchResults extends StatelessWidget {
+  final bool isSearching;
+  final List<NearbyPlace> places;
+  final ValueChanged<NearbyPlace> onSelected;
+
+  const _PlaceSearchResults({
+    required this.isSearching,
+    required this.places,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isSearching && places.isEmpty) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 220),
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: isSearching
+          ? const Padding(
+              padding: EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 12),
+                  Text('Searching restaurants...'),
+                ],
+              ),
+            )
+          : ListView.separated(
+              shrinkWrap: true,
+              itemCount: places.length,
+              separatorBuilder: (context, index) =>
+                  Divider(height: 1, color: colorScheme.outlineVariant),
+              itemBuilder: (context, index) {
+                final place = places[index];
+                return ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.restaurant_outlined),
+                  title: Text(place.name),
+                  subtitle: place.address == null ? null : Text(place.address!),
+                  onTap: () => onSelected(place),
+                );
+              },
+            ),
     );
   }
 }

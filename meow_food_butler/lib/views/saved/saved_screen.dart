@@ -3,6 +3,7 @@ import 'package:meow_food_butler/models/experience_card.dart';
 import 'package:meow_food_butler/view_models/saved_view_model.dart';
 import 'package:meow_food_butler/views/saved/experience_detail_screen.dart';
 import 'package:meow_food_butler/views/saved/experience_entry_sheet.dart';
+import 'package:meow_food_butler/views/saved/widgets/experience_photo.dart';
 import 'package:provider/provider.dart';
 
 class SavedScreen extends StatelessWidget {
@@ -152,34 +153,14 @@ class _ExperienceCardTile extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: experience.photoUrls.isEmpty
-                        ? Container(
-                            width: 56,
-                            height: 56,
-                            color: colorScheme.primaryContainer,
-                            child: Icon(
-                              Icons.restaurant,
-                              color: colorScheme.onPrimaryContainer,
-                            ),
-                          )
-                        : Image.network(
-                            experience.photoUrls.first,
-                            width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                                  width: 56,
-                                  height: 56,
-                                  color: colorScheme.primaryContainer,
-                                  child: Icon(
-                                    Icons.broken_image_outlined,
-                                    color: colorScheme.onPrimaryContainer,
-                                  ),
-                                ),
-                          ),
+                  ExperiencePhoto(
+                    key: ValueKey(
+                      '${experience.id}-${experience.photoPaths.firstOrNull ?? experience.photoUrls.firstOrNull ?? 'empty'}',
+                    ),
+                    experience: experience,
+                    width: 56,
+                    height: 56,
+                    borderRadius: 14,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
