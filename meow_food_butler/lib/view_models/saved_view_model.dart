@@ -9,30 +9,7 @@ class SavedViewModel extends ChangeNotifier {
   final ExperienceRepository _repository;
   StreamSubscription<List<ExperienceCard>>? _subscription;
 
-  final List<ExperienceCard> _experiences = [
-    ExperienceCard(
-      id: 'seed-exp-ramen',
-      placeTitle: 'Ippudo Tokyo',
-      photoUrls: const [
-        'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=600&q=80',
-      ],
-      personalTags: const ['ramen', 'warm'],
-      personalRating: 4.5,
-      personalNote: 'Broth was rich and cozy. Good spot for a rainy night.',
-      isDone: true,
-    ),
-    ExperienceCard(
-      id: 'seed-exp-matcha',
-      placeTitle: 'Matcha Maiden',
-      photoUrls: const [
-        'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=600&q=80',
-      ],
-      personalTags: const ['dessert', 'afternoon'],
-      personalRating: 5,
-      personalNote: 'Loved the crepe cake and the calm interior.',
-      isDone: true,
-    ),
-  ];
+  final List<ExperienceCard> _experiences = [];
 
   bool _isSaving = false;
   String? _errorMessage;
@@ -59,11 +36,6 @@ class SavedViewModel extends ChangeNotifier {
   }) async {
     await _runSaveAction(
       () => _repository.addExperience(experience, photos: photos),
-      fallback: () {
-        final id =
-            experience.id ?? 'exp-${DateTime.now().microsecondsSinceEpoch}';
-        _experiences.insert(0, experience.copyWith(id: id));
-      },
     );
   }
 
@@ -73,15 +45,6 @@ class SavedViewModel extends ChangeNotifier {
   }) async {
     await _runSaveAction(
       () => _repository.updateExperience(experience, newPhotos: newPhotos),
-      fallback: () {
-        final id = experience.id;
-        if (id == null) return;
-
-        final index = _experiences.indexWhere((item) => item.id == id);
-        if (index == -1) return;
-
-        _experiences[index] = experience;
-      },
     );
   }
 
@@ -89,16 +52,10 @@ class SavedViewModel extends ChangeNotifier {
     final experience = experienceById(id);
     if (experience == null) return;
 
-    await _runSaveAction(
-      () => _repository.deleteExperience(experience),
-      fallback: () => _experiences.removeWhere((item) => item.id == id),
-    );
+    await _runSaveAction(() => _repository.deleteExperience(experience));
   }
 
-  Future<void> _runSaveAction(
-    Future<void> Function() action, {
-    required VoidCallback fallback,
-  }) async {
+  Future<void> _runSaveAction(Future<void> Function() action) async {
     if (_isSaving) return;
 
     _isSaving = true;
@@ -108,8 +65,8 @@ class SavedViewModel extends ChangeNotifier {
     try {
       await action();
     } catch (error) {
-      fallback();
-      _errorMessage = 'Saved locally. Cloud sync failed: $error';
+      _errorMessage = 'Cloud sync failed: $error';
+      rethrow;
     } finally {
       _isSaving = false;
       notifyListeners();

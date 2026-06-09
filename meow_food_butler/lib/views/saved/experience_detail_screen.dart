@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:meow_food_butler/models/experience_card.dart';
 import 'package:meow_food_butler/view_models/saved_view_model.dart';
 import 'package:meow_food_butler/views/saved/experience_entry_sheet.dart';
+import 'package:meow_food_butler/views/saved/widgets/experience_photo.dart';
 import 'package:provider/provider.dart';
 
 class ExperienceDetailScreen extends StatelessWidget {
@@ -134,30 +135,38 @@ class ExperienceDetailScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              if (experience.photoUrls.isNotEmpty) ...[
+              if (experience.photoUrls.isNotEmpty ||
+                  experience.photoPaths.isNotEmpty) ...[
                 SizedBox(
                   height: 180,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    itemCount: experience.photoUrls.length,
+                    itemCount: experience.photoUrls.isNotEmpty
+                        ? experience.photoUrls.length
+                        : experience.photoPaths.length,
                     separatorBuilder: (context, index) =>
                         const SizedBox(width: 12),
                     itemBuilder: (context, index) {
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: Image.network(
-                          experience.photoUrls[index],
-                          width: 180,
-                          height: 180,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                                width: 180,
-                                height: 180,
-                                color: colorScheme.surfaceContainerHighest,
-                                child: const Icon(Icons.broken_image_outlined),
-                              ),
+                      final photoUrl = index < experience.photoUrls.length
+                          ? experience.photoUrls[index]
+                          : null;
+                      final photoPath = index < experience.photoPaths.length
+                          ? experience.photoPaths[index]
+                          : null;
+
+                      return ExperiencePhoto(
+                        key: ValueKey(
+                          '${experience.id}-$index-${photoPath ?? photoUrl ?? 'empty'}',
                         ),
+                        experience: experience.copyWith(
+                          photoUrls: photoUrl == null ? const [] : [photoUrl],
+                          photoPaths: photoPath == null
+                              ? const []
+                              : [photoPath],
+                        ),
+                        width: 180,
+                        height: 180,
+                        borderRadius: 18,
                       );
                     },
                   ),

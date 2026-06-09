@@ -20,11 +20,27 @@ class ExperienceRepository {
     return _collection
         .orderBy('createdTime', descending: true)
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => ExperienceCard.fromMap(doc.data(), doc.id))
-              .toList(),
-        );
+        .asyncMap((snapshot) async {
+          final experiences = <ExperienceCard>[];
+
+          for (final doc in snapshot.docs) {
+            var experience = ExperienceCard.fromMap(doc.data(), doc.id);
+            if (experience.photoUrls.isEmpty &&
+                experience.photoPaths.isNotEmpty) {
+              final urls = await _downloadUrlsFor(experience.photoPaths);
+              if (urls.isNotEmpty) {
+                experience = experience.copyWith(photoUrls: urls);
+                await doc.reference.update({
+                  'photoUrls': urls,
+                  'updatedTime': FieldValue.serverTimestamp(),
+                });
+              }
+            }
+            experiences.add(experience);
+          }
+
+          return experiences;
+        });
   }
 
   Future<void> addExperience(
@@ -32,24 +48,18 @@ class ExperienceRepository {
     List<XFile> photos = const [],
   }) async {
     final docRef = _collection.doc();
-    final baseExperience = experience.copyWith(
+    final uploaded = photos.isEmpty
+        ? const _UploadedPhotos(paths: [], urls: [])
+        : await _uploadPhotos(docRef.id, photos);
+    final savedExperience = experience.copyWith(
       id: docRef.id,
-      photoPaths: const [],
-      photoUrls: const [],
+      photoPaths: uploaded.paths,
+      photoUrls: uploaded.urls,
     );
 
     await docRef.set({
-      ...baseExperience.toMap(),
+      ...savedExperience.toMap(),
       'createdTime': FieldValue.serverTimestamp(),
-      'updatedTime': FieldValue.serverTimestamp(),
-    });
-
-    if (photos.isEmpty) return;
-
-    final uploaded = await _uploadPhotos(docRef.id, photos);
-    await docRef.update({
-      'photoPaths': uploaded.paths,
-      'photoUrls': uploaded.urls,
       'updatedTime': FieldValue.serverTimestamp(),
     });
   }
@@ -107,7 +117,7 @@ class ExperienceRepository {
 
       await ref.putData(
         await photo.readAsBytes(),
-        SettableMetadata(contentType: 'image/$extension'),
+        SettableMetadata(contentType: _contentTypeFor(extension)),
       );
 
       paths.add(path);
@@ -117,10 +127,27 @@ class ExperienceRepository {
     return _UploadedPhotos(paths: paths, urls: urls);
   }
 
+  Future<List<String>> _downloadUrlsFor(List<String> paths) async {
+    final urls = <String>[];
+    for (final path in paths) {
+      try {
+        urls.add(await _storage.ref(path).getDownloadURL());
+      } on FirebaseException {
+        // Ignore broken legacy paths; the UI will keep the placeholder.
+      }
+    }
+    return urls;
+  }
+
   String _extensionFor(String fileName) {
     final extension = fileName.split('.').last.toLowerCase();
     if (extension == 'png' || extension == 'webp') return extension;
     return 'jpg';
+  }
+
+  String _contentTypeFor(String extension) {
+    if (extension == 'jpg') return 'image/jpeg';
+    return 'image/$extension';
   }
 }
 

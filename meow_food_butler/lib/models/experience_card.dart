@@ -5,6 +5,7 @@ class ExperienceCard {
   final String? id; // Unique Firestore document ID
   final String?
   foodCardId; // Link reference to the underlying FoodCard/Restaurant
+  final String? placeId; // Google Places ID when the user selects a restaurant
   final String? placeTitle; // User-facing restaurant/place name
   final String? placeAddress; // Human-readable address from device location
   final double? latitude;
@@ -23,6 +24,7 @@ class ExperienceCard {
   ExperienceCard({
     this.id,
     this.foodCardId,
+    this.placeId,
     this.placeTitle,
     this.placeAddress,
     this.latitude,
@@ -45,6 +47,7 @@ class ExperienceCard {
     return ExperienceCard(
       id: id,
       foodCardId: map['foodCardId'] as String?,
+      placeId: _readLocationString(map, 'placeId') ?? map['placeId'] as String?,
       placeTitle: map['placeTitle'] as String?,
       placeAddress: _readLocationString(map, 'address'),
       latitude:
@@ -75,10 +78,12 @@ class ExperienceCard {
   Map<String, dynamic> toMap() {
     return {
       'foodCardId': foodCardId,
+      'placeId': placeId,
       'placeTitle': placeTitle,
       'location': latitude == null || longitude == null
           ? null
           : {
+              'placeId': placeId,
               'name': placeTitle,
               'address': placeAddress,
               'latitude': latitude,
@@ -98,6 +103,7 @@ class ExperienceCard {
   ExperienceCard copyWith({
     String? id,
     String? foodCardId,
+    String? placeId,
     String? placeTitle,
     String? placeAddress,
     double? latitude,
@@ -114,6 +120,7 @@ class ExperienceCard {
     return ExperienceCard(
       id: id ?? this.id,
       foodCardId: foodCardId ?? this.foodCardId,
+      placeId: placeId ?? this.placeId,
       placeTitle: placeTitle ?? this.placeTitle,
       placeAddress: placeAddress ?? this.placeAddress,
       latitude: latitude ?? this.latitude,
@@ -136,6 +143,7 @@ class ExperienceCard {
     return other is ExperienceCard &&
         other.id == id &&
         other.foodCardId == foodCardId &&
+        other.placeId == placeId &&
         other.placeTitle == placeTitle &&
         other.placeAddress == placeAddress &&
         other.latitude == latitude &&
@@ -155,6 +163,7 @@ class ExperienceCard {
     return Object.hash(
       id,
       foodCardId,
+      placeId,
       placeTitle,
       placeAddress,
       latitude,
