@@ -25,7 +25,7 @@ class FoodCardDetail extends StatefulWidget {
     required this.onClose,
     required this.onToggleSave,
     required this.onAddExperience,
-    this.showOnlineInfoTab = true, 
+    this.showOnlineInfoTab = true,
   });
 
   @override
@@ -89,9 +89,12 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
     final allExperiences = context.watch<SavedViewModel>().experiences;
     
+    final isSpotSavedLive = allExperiences.any((e) => 
+      (e.foodCardId ?? e.placeId ?? e.placeTitle) == (widget.foodCard.id ?? widget.foodCard.primaryTitle)
+    );
+
     var currentExperiences = allExperiences.where((e) {
       final key1 = e.foodCardId ?? e.placeId ?? e.placeTitle;
       final key2 = widget.foodCard.id ?? widget.foodCard.primaryTitle;
@@ -124,9 +127,7 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
             children: [
               _buildHeroImage(colorScheme),
               _buildHeader(colorScheme),
-              
               if (widget.showOnlineInfoTab) _buildTabs(colorScheme),
-              
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 100),
@@ -142,7 +143,7 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
               ),
             ],
           ),
-          _buildBottomActionBar(colorScheme),
+          _buildBottomActionBar(colorScheme, isSpotSavedLive),
         ],
       ),
     );
@@ -549,8 +550,31 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
                               if (value == 'edit') {
                                 _openExperienceEntrySheet(experienceToEdit: exp);
                               } else if (value == 'delete') {
-                                if (exp.id != null) {
-                                  await context.read<SavedViewModel>().removeExperience(exp.id!);
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (dialogContext) => AlertDialog(
+                                    title: const Text('Delete Meal'),
+                                    content: const Text('Are you sure you want to delete this meal record?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Theme.of(context).colorScheme.error,
+                                        ),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirm == true && exp.id != null) {
+                                  if (context.mounted) {
+                                    await context.read<SavedViewModel>().removeExperience(exp.id!);
+                                  }
                                 }
                               }
                             },
@@ -594,7 +618,9 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
     return "${diff.inDays} days ago";
   }
 
-  Widget _buildBottomActionBar(ColorScheme colorScheme) {
+  Widget _buildBottomActionBar(ColorScheme colorScheme, bool isSpotSavedLive) {
+    final showSavedStyle = widget.showOnlineInfoTab && isSpotSavedLive;
+
     return Positioned(
       bottom: 0, left: 0, right: 0,
       child: Container(
@@ -608,28 +634,28 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
           child: Container(
             height: 48,
             decoration: BoxDecoration(
-              color: (widget.showOnlineInfoTab && widget.isSaved) ? colorScheme.primaryContainer : colorScheme.primary,
+              color: showSavedStyle ? colorScheme.primaryContainer : colorScheme.primary,
               borderRadius: BorderRadius.circular(24),
-              border: (widget.showOnlineInfoTab && widget.isSaved) ? Border.all(color: colorScheme.outlineVariant) : null,
+              border: showSavedStyle ? Border.all(color: colorScheme.outlineVariant) : null,
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   widget.showOnlineInfoTab 
-                      ? (widget.isSaved ? Icons.bookmark : Icons.bookmark_border)
+                      ? (isSpotSavedLive ? Icons.bookmark : Icons.bookmark_border)
                       : Icons.add,
-                  color: (widget.showOnlineInfoTab && widget.isSaved) ? colorScheme.onPrimaryContainer : colorScheme.onPrimary,
+                  color: showSavedStyle ? colorScheme.onPrimaryContainer : colorScheme.onPrimary,
                   size: 18,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   widget.showOnlineInfoTab 
-                      ? (widget.isSaved ? "Saved to your map" : "Save this spot")
+                      ? (isSpotSavedLive ? "Saved to your map" : "Save this spot")
                       : "Log another meal here",
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: (widget.showOnlineInfoTab && widget.isSaved) ? colorScheme.onPrimaryContainer : colorScheme.onPrimary,
+                    color: showSavedStyle ? colorScheme.onPrimaryContainer : colorScheme.onPrimary,
                   ),
                 ),
               ],

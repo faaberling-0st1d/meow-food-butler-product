@@ -19,24 +19,19 @@ class SavedViewModel extends ChangeNotifier {
     _watchExperiences();
   }
 
-  // Original flat list of all experiences
   List<ExperienceCard> get experiences => List.unmodifiable(_experiences);
 
-  // NEW: Grouped list by restaurant
   List<List<ExperienceCard>> get groupedExperiences {
     final map = <String, List<ExperienceCard>>{};
 
     for (final exp in _experiences) {
-      // Grouping priority: foodCardId > placeId > placeTitle > id
       final key = exp.foodCardId ?? exp.placeId ?? exp.placeTitle ?? exp.id;
       final safeKey = key ?? 'unknown';
-      
       map.putIfAbsent(safeKey, () => []).add(exp);
     }
 
     final groupedList = map.values.toList();
 
-    // 1. Sort experiences within each restaurant group (newest meal first)
     for (final group in groupedList) {
       group.sort((a, b) {
         if (a.createdTime == null && b.createdTime == null) return 0;
@@ -46,7 +41,6 @@ class SavedViewModel extends ChangeNotifier {
       });
     }
 
-    // 2. Sort the restaurant groups themselves (most recently updated restaurant first)
     groupedList.sort((a, b) {
       final aLatest = a.first.createdTime;
       final bLatest = b.first.createdTime;
@@ -74,6 +68,10 @@ class SavedViewModel extends ChangeNotifier {
     ExperienceCard experience, {
     List<XFile> photos = const [],
   }) async {
+    if (!_experiences.any((e) => e.id == experience.id)) {
+      _experiences.insert(0, experience);
+      notifyListeners();
+    }
     await _runSaveAction(
       () => _repository.addExperience(experience, photos: photos),
     );
@@ -92,7 +90,45 @@ class SavedViewModel extends ChangeNotifier {
     final experience = experienceById(id);
     if (experience == null) return;
 
+    _experiences.removeWhere((e) => e.id == id);
+    notifyListeners();
+
     await _runSaveAction(() => _repository.deleteExperience(experience));
+  }
+
+  Future<void> removeMultipleExperiences(List<ExperienceCard> targetExperiences) async {
+    if (targetExperiences.isEmpty) return;
+
+    final idsToRemove = targetExperiences.map((e) => e.id).toSet();
+    _experiences.removeWhere((e) => idsToRemove.contains(e.id));
+    notifyListeners();
+
+    for (final exp in targetExperiences) {
+      try {
+        await _repository.deleteExperience(exp);
+      } catch (e) {
+        debugPrint('Batch delete failed for ${exp.id}: $e');
+      }
+    }
+  }
+
+  Future<void> addMultipleExperiences(List<ExperienceCard> experiencesToAdd) async {
+    if (experiencesToAdd.isEmpty) return;
+
+    for (final exp in experiencesToAdd) {
+      if (!_experiences.any((e) => e.id == exp.id)) {
+        _experiences.insert(0, exp);
+      }
+    }
+    notifyListeners();
+
+    for (final exp in experiencesToAdd) {
+      try {
+        await _repository.addExperience(exp);
+      } catch (e) {
+        debugPrint('Batch add failed for ${exp.id}: $e');
+      }
+    }
   }
 
   Future<void> _runSaveAction(Future<void> Function() action) async {
