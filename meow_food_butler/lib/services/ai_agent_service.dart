@@ -101,6 +101,12 @@ class ChatService {
       ];
 
   Future<void> fetchPromptResponse(String prompt) async {
+    // Resolve location FIRST, before any network await (session creation). On
+    // web the geolocation prompt needs the browser's user-gesture activation
+    // window; a Firestore round-trip first would consume it and `getCurrentPosition`
+    // would be suppressed and return null. Optional — null just means no location.
+    final location = await LocationService.tryGetLatLng();
+
     await _ensureSession();
     final sessionId = _sessionId!;
 
@@ -109,10 +115,6 @@ class ChatService {
     _emit();
 
     try {
-      // Resolve the user's location (prompts for permission the first time) so
-      // the backend `whereAmI` tool can answer "where am I?". Optional.
-      final location = await LocationService.tryGetLatLng();
-
       final payload = <String, dynamic>{
         'prompt': prompt,
         'sessionId': sessionId,

@@ -23,7 +23,7 @@ const placesApiKey = defineSecret("PLACES_API_KEY");
 
 // Read a bound secret's value at runtime. `.value()` throws if the secret isn't
 // bound/available to this function, so guard it and fall back to env vars.
-function resolveGeminiApiKey() {
+function rawGeminiSecret() {
   let key = "";
   try {
     key = geminiApiKey.value();
@@ -31,6 +31,28 @@ function resolveGeminiApiKey() {
     logger.error("geminiApiKey.value() threw", e);
   }
   return key || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+}
+
+/**
+ * All available Gemini API keys, for quota rotation. Store several keys in the
+ * GEMINI_API_KEY secret separated by newlines or commas (ideally keys from
+ * different GCP projects, since free-tier quota is per-project). Google API keys
+ * contain no whitespace/commas, so splitting on them is safe. Deduped, in order.
+ */
+function resolveGeminiApiKeys() {
+  return [
+    ...new Set(
+      rawGeminiSecret()
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/** First available key (back-compat: presence checks, embeddings). */
+function resolveGeminiApiKey() {
+  return resolveGeminiApiKeys()[0] || "";
 }
 
 function resolvePlacesApiKey() {
@@ -50,5 +72,6 @@ module.exports = {
   geminiApiKey,
   placesApiKey,
   resolveGeminiApiKey,
+  resolveGeminiApiKeys,
   resolvePlacesApiKey,
 };

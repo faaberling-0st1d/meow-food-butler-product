@@ -29,16 +29,20 @@ const SYSTEM_PROMPT = [
   "Keep replies concise and end with a cat sound.",
 ].join(" ");
 
-// Cache the Genkit instance + tool refs across warm invocations.
-let _butler = null;
+// Cache one Genkit instance + tool refs PER API key across warm invocations.
+// The key is baked into the googleAI plugin at init, so quota rotation needs a
+// distinct instance per key; the Map keeps each warm instead of re-initializing.
+const _butlers = new Map();
 function getButler(apiKey) {
-  if (_butler) return _butler;
+  const cached = _butlers.get(apiKey);
+  if (cached) return cached;
   // Pass the key explicitly rather than relying on process.env so the binding is
   // unambiguous regardless of how the secret is surfaced.
   const instance = genkit({ plugins: [googleAI({ apiKey })] });
   const tools = registerTools(instance, { placesApiKey: resolvePlacesApiKey() });
-  _butler = { instance, tools };
-  return _butler;
+  const butler = { instance, tools };
+  _butlers.set(apiKey, butler);
+  return butler;
 }
 
 /**
