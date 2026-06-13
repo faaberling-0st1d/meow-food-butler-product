@@ -5,6 +5,8 @@ import 'package:meow_food_butler/models/food_card.dart';
 import 'package:meow_food_butler/views/saved/food_card_detail.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 
+enum MapSheetMode { imported, myPlaces }
+
 class RestaurantListSheet extends StatefulWidget {
   static const double minSize = 0.07;
   static const double middleSize = 0.42;
@@ -14,16 +16,24 @@ class RestaurantListSheet extends StatefulWidget {
 
   final DraggableScrollableController controller;
   final List<ExperienceCard> experiences;
+  final MapSheetMode mode;
+  final int importedCount;
+  final int myPlacesCount;
   final String? selectedExperienceId;
   final String Function(ExperienceCard experience) markerIdFor;
+  final ValueChanged<MapSheetMode> onModeChanged;
   final ValueChanged<ExperienceCard> onExperienceSelected;
   final ValueChanged<ExperienceCard> onExperienceDetailRequested;
   const RestaurantListSheet({
     super.key,
     required this.controller,
     required this.experiences,
+    required this.mode,
+    required this.importedCount,
+    required this.myPlacesCount,
     required this.selectedExperienceId,
     required this.markerIdFor,
+    required this.onModeChanged,
     required this.onExperienceSelected,
     required this.onExperienceDetailRequested,
   });
@@ -33,7 +43,7 @@ class RestaurantListSheet extends StatefulWidget {
 }
 
 class _RestaurantListSheetState extends State<RestaurantListSheet> {
-  static const double _headerScrollExtent = 82;
+  static const double _headerScrollExtent = 132;
   static const double _estimatedCardExtent = 134;
 
   ScrollController? _scrollController;
@@ -174,9 +184,7 @@ class _RestaurantListSheetState extends State<RestaurantListSheet> {
                     ),
                   ],
                 ),
-                child: widget.experiences.isEmpty
-                    ? _EmptyMapSheet(scrollController: scrollController)
-                    : CustomScrollView(
+                child: CustomScrollView(
                         controller: scrollController,
                         physics: const BouncingScrollPhysics(
                           parent: AlwaysScrollableScrollPhysics(),
@@ -186,35 +194,48 @@ class _RestaurantListSheetState extends State<RestaurantListSheet> {
                             pinned: true,
                             delegate: _SheetHeaderDelegate(
                               count: widget.experiences.length,
+                              mode: widget.mode,
+                              importedCount: widget.importedCount,
+                              myPlacesCount: widget.myPlacesCount,
+                              onModeChanged: widget.onModeChanged,
                               controller: widget.controller,
                               backgroundColor: colorScheme.surface,
                             ),
                           ),
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                            sliver: SliverList.separated(
-                              itemCount: widget.experiences.length,
-                              separatorBuilder: (context, index) =>
-                                  const SizedBox(height: 10),
-                              itemBuilder: (context, index) {
-                                final experience = widget.experiences[index];
-                                final selected =
-                                    widget.markerIdFor(experience) ==
-                                    widget.selectedExperienceId;
+                          if (widget.experiences.isEmpty)
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: _EmptyMapSheetContent(mode: widget.mode),
+                            )
+                          else
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                              sliver: SliverList.separated(
+                                itemCount: widget.experiences.length,
+                                separatorBuilder: (context, index) =>
+                                    const SizedBox(height: 10),
+                                itemBuilder: (context, index) {
+                                  final experience = widget.experiences[index];
+                                  final selected =
+                                      widget.markerIdFor(experience) ==
+                                      widget.selectedExperienceId;
 
-                                return _MapRestaurantCard(
-                                  experience: experience,
-                                  selected: selected,
-                                  onTap: () {
-                                    widget.onExperienceDetailRequested(experience);
-                                    _showRestaurantDetail(context, experience);
-                                  },
-                                  onLocate: () =>
-                                      widget.onExperienceSelected(experience),
-                                );
-                              },
+                                  return _MapRestaurantCard(
+                                    experience: experience,
+                                    selected: selected,
+                                    mode: widget.mode,
+                                    onTap: () {
+                                      widget.onExperienceDetailRequested(
+                                        experience,
+                                      );
+                                      _showRestaurantDetail(context, experience);
+                                    },
+                                    onLocate: () =>
+                                        widget.onExperienceSelected(experience),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
                         ],
                       ),
               ),
@@ -240,16 +261,24 @@ class _MapSheetScrollBehavior extends MaterialScrollBehavior {
 
 class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   final int count;
+  final MapSheetMode mode;
+  final int importedCount;
+  final int myPlacesCount;
+  final ValueChanged<MapSheetMode> onModeChanged;
   final DraggableScrollableController controller;
   final Color backgroundColor;
 
   const _SheetHeaderDelegate({
     required this.count,
+    required this.mode,
+    required this.importedCount,
+    required this.myPlacesCount,
+    required this.onModeChanged,
     required this.controller,
     required this.backgroundColor,
   });
 
-  static const double _height = 82;
+  static const double _height = 132;
 
   @override
   double get minExtent => _height;
@@ -280,13 +309,24 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
               ]
             : null,
       ),
-      child: _SheetHeader(count: count, controller: controller),
+      child: _SheetHeader(
+        count: count,
+        mode: mode,
+        importedCount: importedCount,
+        myPlacesCount: myPlacesCount,
+        onModeChanged: onModeChanged,
+        controller: controller,
+      ),
     );
   }
 
   @override
   bool shouldRebuild(covariant _SheetHeaderDelegate oldDelegate) {
     return count != oldDelegate.count ||
+        mode != oldDelegate.mode ||
+        importedCount != oldDelegate.importedCount ||
+        myPlacesCount != oldDelegate.myPlacesCount ||
+        onModeChanged != oldDelegate.onModeChanged ||
         controller != oldDelegate.controller ||
         backgroundColor != oldDelegate.backgroundColor;
   }
@@ -294,9 +334,20 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
 
 class _SheetHeader extends StatelessWidget {
   final int count;
+  final MapSheetMode mode;
+  final int importedCount;
+  final int myPlacesCount;
+  final ValueChanged<MapSheetMode> onModeChanged;
   final DraggableScrollableController controller;
 
-  const _SheetHeader({required this.count, required this.controller});
+  const _SheetHeader({
+    required this.count,
+    required this.mode,
+    required this.importedCount,
+    required this.myPlacesCount,
+    required this.onModeChanged,
+    required this.controller,
+  });
 
   void _dragSheet(BuildContext context, DragUpdateDetails details) {
     if (!controller.isAttached) return;
@@ -326,13 +377,16 @@ class _SheetHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final title = mode == MapSheetMode.imported
+        ? '$count imported place${count == 1 ? '' : 's'}'
+        : '$count place${count == 1 ? '' : 's'} on your food map';
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onVerticalDragUpdate: (details) => _dragSheet(context, details),
       onVerticalDragEnd: (_) => _snapSheet(),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
         child: Column(
           children: [
             Container(
@@ -346,11 +400,17 @@ class _SheetHeader extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                Icon(Icons.place, color: colorScheme.primary, size: 20),
+                Icon(
+                  mode == MapSheetMode.imported
+                      ? Icons.auto_awesome
+                      : Icons.place,
+                  color: colorScheme.primary,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '$count saved place${count == 1 ? '' : 's'} on your map',
+                    title,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
@@ -358,7 +418,105 @@ class _SheetHeader extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            _MapSheetSegmentedControl(
+              mode: mode,
+              importedCount: importedCount,
+              myPlacesCount: myPlacesCount,
+              onChanged: onModeChanged,
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MapSheetSegmentedControl extends StatelessWidget {
+  final MapSheetMode mode;
+  final int importedCount;
+  final int myPlacesCount;
+  final ValueChanged<MapSheetMode> onChanged;
+
+  const _MapSheetSegmentedControl({
+    required this.mode,
+    required this.importedCount,
+    required this.myPlacesCount,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          _SegmentButton(
+            label: 'Imported',
+            count: importedCount,
+            selected: mode == MapSheetMode.imported,
+            onTap: () => onChanged(MapSheetMode.imported),
+          ),
+          _SegmentButton(
+            label: 'My Places',
+            count: myPlacesCount,
+            selected: mode == MapSheetMode.myPlaces,
+            onTap: () => onChanged(MapSheetMode.myPlaces),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentButton extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SegmentButton({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Expanded(
+      child: InkWell(
+        onTap: selected ? null : onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? colorScheme.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            '$label  $count',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: selected
+                  ? colorScheme.onPrimary
+                  : colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ),
       ),
     );
@@ -368,12 +526,14 @@ class _SheetHeader extends StatelessWidget {
 class _MapRestaurantCard extends StatelessWidget {
   final ExperienceCard experience;
   final bool selected;
+  final MapSheetMode mode;
   final VoidCallback onTap;
   final VoidCallback onLocate;
 
   const _MapRestaurantCard({
     required this.experience,
     required this.selected,
+    required this.mode,
     required this.onTap,
     required this.onLocate,
   });
@@ -487,15 +647,24 @@ class _MapRestaurantCard extends StatelessWidget {
                             Row(
                               children: [
                                 Icon(
-                                  Icons.star,
+                                  mode == MapSheetMode.imported
+                                      ? Icons.link
+                                      : Icons.star,
                                   size: 16,
-                                  color: Colors.amber.shade700,
+                                  color: mode == MapSheetMode.imported
+                                      ? colorScheme.primary
+                                      : Colors.amber.shade700,
                                 ),
                                 const SizedBox(width: 3),
                                 Text(
-                                  experience.personalRating.toStringAsFixed(1),
+                                  mode == MapSheetMode.imported
+                                      ? 'From import'
+                                      : experience.personalRating
+                                            .toStringAsFixed(1),
                                   style: theme.textTheme.labelLarge?.copyWith(
-                                    color: Colors.amber.shade800,
+                                    color: mode == MapSheetMode.imported
+                                        ? colorScheme.primary
+                                        : Colors.amber.shade800,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -580,50 +749,47 @@ class _MapRestaurantCard extends StatelessWidget {
   }
 }
 
-class _EmptyMapSheet extends StatelessWidget {
-  final ScrollController scrollController;
+class _EmptyMapSheetContent extends StatelessWidget {
+  final MapSheetMode mode;
 
-  const _EmptyMapSheet({required this.scrollController});
+  const _EmptyMapSheetContent({required this.mode});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isImported = mode == MapSheetMode.imported;
 
-    return ListView(
-      controller: scrollController,
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
+    return Padding(
       padding: const EdgeInsets.fromLTRB(24, 10, 24, 32),
-      children: [
-        Center(
-          child: Container(
-            width: 42,
-            height: 5,
-            decoration: BoxDecoration(
-              color: colorScheme.outlineVariant,
-              borderRadius: BorderRadius.circular(99),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            isImported ? Icons.auto_awesome_outlined : Icons.map_outlined,
+            size: 58,
+            color: colorScheme.primary,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            isImported
+                ? 'No imported places yet'
+                : 'No places on your food map yet',
+            textAlign: TextAlign.center,
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isImported
+                ? 'Paste an Instagram or food URL to turn mentioned restaurants into map cards.'
+                : 'Log a meal with a place or save a restaurant to show it here.',
+            textAlign: TextAlign.center,
+            style: textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
             ),
           ),
-        ),
-        const SizedBox(height: 40),
-        Icon(Icons.map_outlined, size: 58, color: colorScheme.primary),
-        const SizedBox(height: 16),
-        Text(
-          'No saved restaurants on the map yet',
-          textAlign: TextAlign.center,
-          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Save a meal with a selected place or current location to show it here.',
-          textAlign: TextAlign.center,
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -274,10 +274,13 @@ class _MainMapScreenState extends State<MainMapScreen> {
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
 
+  final List<ExperienceCard> _importedCandidates = [];
+
   LatLng _center = _defaultCenter;
   LatLng? _currentLocation;
 
   String? _selectedExperienceId;
+  MapSheetMode _sheetMode = MapSheetMode.myPlaces;
 
   bool _canUseLocation = false;
   bool _isLocating = false;
@@ -455,7 +458,10 @@ class _MainMapScreenState extends State<MainMapScreen> {
     return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
   }
 
-  List<ExperienceCard> _mapExperiences(List<ExperienceCard> experiences) {
+  List<ExperienceCard> _mapExperiences(
+    List<ExperienceCard> experiences, {
+    bool groupImportedBySource = false,
+  }) {
     final deduped = <String, ExperienceCard>{};
 
     for (final experience in experiences) {
@@ -464,6 +470,7 @@ class _MainMapScreenState extends State<MainMapScreen> {
       }
 
       final key =
+          (groupImportedBySource ? experience.originalURL : null) ??
           experience.placeId ??
           experience.foodCardId ??
           '${experience.placeTitle ?? 'unknown'}-${experience.latitude}-${experience.longitude}';
@@ -478,6 +485,10 @@ class _MainMapScreenState extends State<MainMapScreen> {
 
     return deduped.values.toList()
       ..sort((a, b) => b.createdTime.compareTo(a.createdTime));
+  }
+
+  bool _isImportedExperience(ExperienceCard experience) {
+    return experience.originalURL?.trim().isNotEmpty == true;
   }
 
   Set<Marker> _markersFor(List<ExperienceCard> experiences) {
@@ -538,6 +549,7 @@ class _MainMapScreenState extends State<MainMapScreen> {
 
   String _markerIdFor(ExperienceCard experience) {
     return experience.id ??
+        experience.originalURL ??
         experience.placeId ??
         '${experience.placeTitle}-${experience.latitude}-${experience.longitude}';
   }
@@ -621,6 +633,10 @@ class _MainMapScreenState extends State<MainMapScreen> {
     );
 
     if (newExperience != null && mounted) {
+      setState(() {
+        _sheetMode = MapSheetMode.imported;
+        _importedCandidates.insert(0, newExperience);
+      });
       await _selectExperience(newExperience);
     }
   }
@@ -628,7 +644,17 @@ class _MainMapScreenState extends State<MainMapScreen> {
   @override
   Widget build(BuildContext context) {
     final savedExperiences = context.watch<SavedViewModel>().experiences;
-    final mapExperiences = _mapExperiences(savedExperiences);
+    final importedExperiences = _mapExperiences(
+      [
+        ..._importedCandidates,
+        ...savedExperiences.where(_isImportedExperience),
+      ],
+      groupImportedBySource: true,
+    );
+    final myPlaceExperiences = _mapExperiences(savedExperiences);
+    final mapExperiences = _sheetMode == MapSheetMode.imported
+        ? importedExperiences
+        : myPlaceExperiences;
 
     final markers = _markersFor(mapExperiences);
     final circles = _circlesFor(mapExperiences);
@@ -655,8 +681,17 @@ class _MainMapScreenState extends State<MainMapScreen> {
               RestaurantListSheet(
                 controller: _sheetController,
                 experiences: mapExperiences,
+                mode: _sheetMode,
+                importedCount: importedExperiences.length,
+                myPlacesCount: myPlaceExperiences.length,
                 selectedExperienceId: _selectedExperienceId,
                 markerIdFor: _markerIdFor,
+                onModeChanged: (mode) {
+                  setState(() {
+                    _sheetMode = mode;
+                    _selectedExperienceId = null;
+                  });
+                },
                 onExperienceSelected: (experience) {
                   _selectExperience(experience, showInfoWindow: false);
                 },
