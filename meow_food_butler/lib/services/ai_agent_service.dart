@@ -113,6 +113,14 @@ class AiAgentService {
     // 這裡呼叫你的 LLM API (例如 Google GenAI 或 OpenAI)
     // String response = await callLLM(prompt);
     // return response == "UNKNOWN" ? null : response;
+
+    print("[DEBUG] Caption: $caption");
+    print("[DEBUG] Location: $location");
+
+    // 💡 臨時測試：如果內文包含 "圍爐烤肉"，就直接回傳正確的搜尋關鍵字
+    if (caption.contains("圍爐烤肉")) {
+      return "圍爐烤肉 台北市萬華區"; // 這樣 Outscraper 就能精準在地圖上找到了！
+    }
     
     // 💡 暫時 Mock 測試用：
     await Future.delayed(const Duration(seconds: 1));

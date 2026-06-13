@@ -45,9 +45,9 @@ class _ImportInstagramDialogState extends State<ImportInstagramDialog> {
         ),
         ElevatedButton(
           onPressed: vm.isLoading ? null : () async {
-            final success = await context.read<InstagramImportViewModel>().pipelineImport(_controller.text.trim());
-            if (success && mounted) {
-              Navigator.pop(context);
+            final newExpCard = await context.read<InstagramImportViewModel>().pipelineImportAndBuildCard(_controller.text.trim());
+            if (newExpCard != null && mounted) {
+              Navigator.pop(context, newExpCard); // 卡片當結果回傳
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('餐廳資料自動補全並匯入成功！')));
             }
           },
