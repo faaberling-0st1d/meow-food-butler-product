@@ -483,16 +483,39 @@ class _ExperienceCardTile extends StatelessWidget {
                     ),
                   ),
                   PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') onEdit();
-                      if (value == 'delete') onDelete();
+                    onSelected: (value) async {
+                      if (value == 'edit') {
+                        onEdit();
+                      } else if (value == 'delete') {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (dialogContext) => AlertDialog(
+                            title: const Text('Delete Meal'),
+                            content: const Text('Are you sure you want to delete this meal record?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(dialogContext).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.of(dialogContext).pop(true),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Theme.of(context).colorScheme.error,
+                                ),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirm == true) {
+                          onDelete();
+                        }
+                      }
                     },
                     itemBuilder: (context) => [
                       const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('Delete'),
-                      ),
+                      const PopupMenuItem(value: 'delete', child: Text('Delete')),
                     ],
                   ),
                 ],
