@@ -1,6 +1,5 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
+import 'dart:ui' as ui;
 
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:meow_food_butler/models/experience_card.dart';
@@ -21,6 +20,8 @@ class MainMapScreen extends StatefulWidget {
 
 class _MainMapScreenState extends State<MainMapScreen> {
   static const LatLng _defaultCenter = LatLng(25.032969, 121.542598);
+  static const double _locationZoom = 17;
+
   static const String _mapStyle = '''
 [
   {
@@ -267,17 +268,24 @@ class _MainMapScreenState extends State<MainMapScreen> {
 ''';
 
   GoogleMapController? _mapController;
+  BitmapDescriptor? _blackSpotIcon;
+  BitmapDescriptor? _redSpotIcon;
+
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
+
   LatLng _center = _defaultCenter;
   LatLng? _currentLocation;
+
   String? _selectedExperienceId;
+
   bool _canUseLocation = false;
   bool _isLocating = false;
 
   @override
   void initState() {
     super.initState();
+    _loadSpotIcons();
     _moveToCurrentLocation();
   }
 
@@ -289,6 +297,162 @@ class _MainMapScreenState extends State<MainMapScreen> {
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
+
+    if (_currentLocation != null) {
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: _currentLocation!, zoom: _locationZoom),
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadSpotIcons() async {
+    final blackIcon = await _buildPinIcon(
+      fillColor: const Color(0xFF3F3F46),
+      size: 28,
+      active: false,
+    );
+
+    final redIcon = await _buildPinIcon(
+      fillColor: const Color(0xFFEF4444),
+      size: 28,
+      active: true,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _blackSpotIcon = blackIcon;
+      _redSpotIcon = redIcon;
+    });
+  }
+
+  Future<BitmapDescriptor> _buildPinIcon({
+    required Color fillColor,
+    required int size,
+    required bool active,
+  }) async {
+    final int canvasSize = active ? 72 : 56;
+    final double scale = size / 24.0;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    final Offset canvasCenter = Offset(canvasSize / 2, canvasSize / 2);
+    final Offset origin = Offset(
+      canvasCenter.dx - size / 2,
+      canvasCenter.dy - size / 2,
+    );
+
+    if (active) {
+      final pulsePaint = Paint()
+        ..color = const Color(0xFFEF4444).withOpacity(0.22)
+        ..style = PaintingStyle.fill;
+
+      canvas.drawCircle(
+        canvasCenter,
+        size * 0.58,
+        pulsePaint,
+      );
+    }
+
+    canvas.save();
+    canvas.translate(origin.dx, origin.dy);
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.25)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+
+    final pinPaint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill;
+
+    final strokePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5 * scale
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final whiteDotPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final innerDotPaint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill;
+
+    Path pinPath() {
+      return Path()
+        ..moveTo(20 * scale, 10 * scale)
+        ..cubicTo(
+          20 * scale,
+          14.993 * scale,
+          14.461 * scale,
+          20.193 * scale,
+          12.601 * scale,
+          21.799 * scale,
+        )
+        ..cubicTo(
+          12.239 * scale,
+          22.112 * scale,
+          11.761 * scale,
+          22.112 * scale,
+          11.399 * scale,
+          21.799 * scale,
+        )
+        ..cubicTo(
+          9.539 * scale,
+          20.193 * scale,
+          4 * scale,
+          14.993 * scale,
+          4 * scale,
+          10 * scale,
+        )
+        ..cubicTo(
+          4 * scale,
+          5.582 * scale,
+          7.582 * scale,
+          2 * scale,
+          12 * scale,
+          2 * scale,
+        )
+        ..cubicTo(
+          16.418 * scale,
+          2 * scale,
+          20 * scale,
+          5.582 * scale,
+          20 * scale,
+          10 * scale,
+        )
+        ..close();
+    }
+
+    final path = pinPath();
+    canvas.drawPath(path.shift(Offset(0, 2 * scale)), shadowPaint);
+    canvas.drawPath(path, pinPaint);
+    canvas.drawPath(path, strokePaint);
+
+    canvas.drawCircle(
+      Offset(12 * scale, 10 * scale),
+      3 * scale,
+      whiteDotPaint,
+    );
+
+    canvas.drawCircle(
+      Offset(12 * scale, 10 * scale),
+      1.35 * scale,
+      innerDotPaint,
+    );
+
+    canvas.restore();
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(canvasSize, canvasSize);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+    return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
   }
 
   List<ExperienceCard> _mapExperiences(List<ExperienceCard> experiences) {
@@ -303,7 +467,9 @@ class _MainMapScreenState extends State<MainMapScreen> {
           experience.placeId ??
           experience.foodCardId ??
           '${experience.placeTitle ?? 'unknown'}-${experience.latitude}-${experience.longitude}';
+
       final current = deduped[key];
+
       if (current == null ||
           experience.createdTime.compareTo(current.createdTime) > 0) {
         deduped[key] = experience;
@@ -314,104 +480,22 @@ class _MainMapScreenState extends State<MainMapScreen> {
       ..sort((a, b) => b.createdTime.compareTo(a.createdTime));
   }
 
-  // NOTE: 為了避免 async 產生 marker/icon 造成結構複雜，
-  // 目前先把自製圓點方法整段註解掉。
-  // Future<BitmapDescriptor> _buildCurrentLocationDescriptor() async {
-  //   // Web/CPU rendering path: generate a bitmap with a blue dot + ring.
-  //   // If it fails for any reason, fall back to default hue marker.
-  //   try {
-  //     const int size = 96;
-  //     final ui.PictureRecorder recorder = ui.PictureRecorder();
-  //     final Canvas canvas = Canvas(recorder);
-  //
-  //     final double radius = size * 0.16;
-  //     final Offset center = Offset(size / 2.0, size / 2.0);
-  //
-  //     final ringPaint = Paint()
-  //       ..color = Colors.lightBlueAccent.withOpacity(0.35)
-  //       ..style = PaintingStyle.stroke
-  //       ..strokeWidth = 10;
-  //     canvas.drawCircle(center, radius + 10, ringPaint);
-  //
-  //     final glowPaint = Paint()
-  //       ..color = Colors.lightBlue.withOpacity(0.35)
-  //       ..style = PaintingStyle.fill;
-  //     canvas.drawCircle(center, radius + 6, glowPaint);
-  //
-  //     final dotPaint = Paint()..color = Colors.blueAccent;
-  //     canvas.drawCircle(center, radius, dotPaint);
-  //
-  //     final picture = recorder.endRecording();
-  //     final img = await picture.toImage(size, size);
-  //     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-  //     final pngBytes = byteData!.buffer.asUint8List();
-  //     return BitmapDescriptor.fromBytes(pngBytes);
-  //   } catch (_) {
-  //     return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
-  //   }
-  // }
-
-  Future<Set<Marker>> _markersForAsync(List<ExperienceCard> experiences) async {
-    final markers = <Marker>{};
-
-    for (final experience in experiences) {
-      final markerId = _markerIdFor(experience);
-      final selected = markerId == _selectedExperienceId;
-      final position = LatLng(experience.latitude!, experience.longitude!);
-
-      markers.add(
-        Marker(
-          markerId: MarkerId(markerId),
-          position: position,
-          zIndexInt: selected ? 10 : 0,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            selected ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
-          ),
-          infoWindow: InfoWindow(
-            title: experience.placeTitle ?? 'Unnamed restaurant',
-            snippet: experience.placeAddress,
-          ),
-          onTap: () => _selectExperience(experience, showInfoWindow: false),
-        ),
-      );
-    }
-
-    final currentLocation = _currentLocation;
-    if (currentLocation != null) {
-      // 自製 icon 方法目前已註解，暫時先用預設藍色 marker。
-      final icon = BitmapDescriptor.defaultMarkerWithHue(
-        BitmapDescriptor.hueAzure,
-      );
-      markers.add(
-        Marker(
-          markerId: const MarkerId('current-location'),
-          position: currentLocation,
-          zIndexInt: 50,
-          icon: icon,
-          anchor: const Offset(0.5, 0.5),
-          draggable: false,
-          visible: true,
-          infoWindow: const InfoWindow(title: 'You are here'),
-        ),
-      );
-    }
-
-    return markers;
-  }
-
   Set<Marker> _markersFor(List<ExperienceCard> experiences) {
-    final markers = experiences.map((experience) {
+    return experiences.map((experience) {
       final markerId = _markerIdFor(experience);
       final selected = markerId == _selectedExperienceId;
       final position = LatLng(experience.latitude!, experience.longitude!);
 
       return Marker(
-        markerId: MarkerId(markerId),
+        markerId: MarkerId(selected ? '$markerId-selected' : markerId),
         position: position,
-        zIndexInt: selected ? 10 : 0,
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          selected ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
-        ),
+        zIndexInt: selected ? 100 : 0,
+        icon: selected
+            ? (_redSpotIcon ??
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed))
+            : (_blackSpotIcon ??
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet)),
+        anchor: const Offset(0.5, 1.0),
         infoWindow: InfoWindow(
           title: experience.placeTitle ?? 'Unnamed restaurant',
           snippet: experience.placeAddress,
@@ -419,26 +503,37 @@ class _MainMapScreenState extends State<MainMapScreen> {
         onTap: () => _selectExperience(experience, showInfoWindow: false),
       );
     }).toSet();
+  }
+
+  Set<Circle> _circlesFor(List<ExperienceCard> experiences) {
+    final circles = <Circle>{};
 
     final currentLocation = _currentLocation;
+
     if (currentLocation != null) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('current-location'),
-          position: currentLocation,
-          zIndexInt: 50,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueAzure,
-          ),
-          anchor: const Offset(0.5, 0.5),
-          draggable: false,
-          visible: true,
-          infoWindow: const InfoWindow(title: 'You are here'),
+      circles.addAll({
+        Circle(
+          circleId: const CircleId('current-location-range'),
+          center: currentLocation,
+          radius: 45,
+          fillColor: Colors.blueAccent.withOpacity(0.18),
+          strokeColor: Colors.blueAccent.withOpacity(0.35),
+          strokeWidth: 1,
+          zIndex: 99,
         ),
-      );
+        Circle(
+          circleId: const CircleId('current-location-dot'),
+          center: currentLocation,
+          radius: 12,
+          fillColor: Colors.blueAccent.withOpacity(0.95),
+          strokeColor: Colors.white,
+          strokeWidth: 4,
+          zIndex: 100,
+        ),
+      });
     }
 
-    return markers;
+    return circles;
   }
 
   String _markerIdFor(ExperienceCard experience) {
@@ -453,33 +548,42 @@ class _MainMapScreenState extends State<MainMapScreen> {
   }) async {
     final latitude = experience.latitude;
     final longitude = experience.longitude;
+
     if (latitude == null || longitude == null) return;
 
     final markerId = _markerIdFor(experience);
-    setState(() => _selectedExperienceId = markerId);
+
+    setState(() {
+      _selectedExperienceId = markerId;
+    });
 
     await _mapController?.animateCamera(
       CameraUpdate.newCameraPosition(
-        CameraPosition(target: LatLng(latitude, longitude), zoom: 16),
+        CameraPosition(target: LatLng(latitude, longitude), zoom: _locationZoom),
       ),
     );
 
     if (showInfoWindow) {
-      await _mapController?.showMarkerInfoWindow(MarkerId(markerId));
+      await _mapController?.showMarkerInfoWindow( MarkerId('$markerId-selected'),);
     }
   }
 
   Future<void> _moveToCurrentLocation() async {
     if (_isLocating) return;
 
-    setState(() => _isLocating = true);
+    setState(() {
+      _isLocating = true;
+    });
 
     try {
       final position = await getCurrentMapPosition();
+
       if (position == null) return;
+
       final target = LatLng(position.latitude, position.longitude);
 
       if (!mounted) return;
+
       setState(() {
         _center = target;
         _currentLocation = target;
@@ -488,16 +592,21 @@ class _MainMapScreenState extends State<MainMapScreen> {
 
       await _mapController?.animateCamera(
         CameraUpdate.newCameraPosition(
-          CameraPosition(target: target, zoom: 15),
+          CameraPosition(target: target, zoom: _locationZoom),
         ),
       );
     } catch (error) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not get current location: $error')),
       );
     } finally {
-      if (mounted) setState(() => _isLocating = false);
+      if (mounted) {
+        setState(() {
+          _isLocating = false;
+        });
+      }
     }
   }
 
@@ -520,7 +629,9 @@ class _MainMapScreenState extends State<MainMapScreen> {
   Widget build(BuildContext context) {
     final savedExperiences = context.watch<SavedViewModel>().experiences;
     final mapExperiences = _mapExperiences(savedExperiences);
+
     final markers = _markersFor(mapExperiences);
+    final circles = _circlesFor(mapExperiences);
 
     return Scaffold(
       body: LayoutBuilder(
@@ -531,12 +642,13 @@ class _MainMapScreenState extends State<MainMapScreen> {
                 onMapCreated: _onMapCreated,
                 initialCameraPosition: CameraPosition(
                   target: _center,
-                  zoom: 15,
+                  zoom: _locationZoom,
                 ),
                 myLocationEnabled: _canUseLocation,
                 myLocationButtonEnabled: false,
                 zoomControlsEnabled: false,
                 markers: markers,
+                circles: circles,
                 style: _mapStyle,
                 webGestureHandling: WebGestureHandling.greedy,
               ),
@@ -545,7 +657,12 @@ class _MainMapScreenState extends State<MainMapScreen> {
                 experiences: mapExperiences,
                 selectedExperienceId: _selectedExperienceId,
                 markerIdFor: _markerIdFor,
-                onExperienceSelected: _selectExperience,
+                onExperienceSelected: (experience) {
+                  _selectExperience(experience, showInfoWindow: false);
+                },
+                onExperienceDetailRequested: (experience) {
+                  _selectExperience(experience, showInfoWindow: false);
+                },
               ),
               AnimatedBuilder(
                 animation: _sheetController,
@@ -553,6 +670,7 @@ class _MainMapScreenState extends State<MainMapScreen> {
                   final sheetSize = _sheetController.isAttached
                       ? _sheetController.size
                       : RestaurantListSheet.initialSize;
+
                   final bottom =
                       constraints.maxHeight * sheetSize +
                       MediaQuery.of(context).padding.bottom +

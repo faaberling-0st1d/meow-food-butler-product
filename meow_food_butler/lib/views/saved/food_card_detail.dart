@@ -7,6 +7,7 @@ import '../../view_models/saved_view_model.dart';
 
 import 'experience_entry_sheet.dart'; 
 import 'experience_detail_screen.dart';
+import 'widgets/experience_photo.dart';
 
 class FoodCardDetail extends StatefulWidget {
   final FoodCard foodCard;
@@ -68,6 +69,7 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
               personalTags: const [],
               personalRating: 0.0,
             ),
+            savedPlaceSuggestions: context.read<SavedViewModel>().experiences,
             onSave: (savedExperience, photos) async {
               if (experienceToEdit == null) {
                 await context.read<SavedViewModel>().addExperience(savedExperience, photos: photos);
@@ -125,7 +127,7 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
         children: [
           Column(
             children: [
-              _buildHeroImage(colorScheme),
+              _buildHeroImage(colorScheme, currentExperiences),
               _buildHeader(colorScheme),
               if (widget.showOnlineInfoTab) _buildTabs(colorScheme),
               Expanded(
@@ -149,16 +151,51 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
     );
   }
 
-  Widget _buildHeroImage(ColorScheme colorScheme) {
+  Widget _buildHeroImage(
+    ColorScheme colorScheme,
+    List<ExperienceCard> currentExperiences,
+  ) {
+    ExperienceCard? heroExperience;
+    for (final experience in currentExperiences) {
+      if (experience.photoUrls.isNotEmpty || experience.photoPaths.isNotEmpty) {
+        heroExperience = experience;
+        break;
+      }
+    }
+
     return Stack(
       children: [
         Container(
           height: 220,
           width: double.infinity,
           color: colorScheme.surfaceContainerHighest,
-          child: widget.foodCard.originalURL != null
-              ? Image.network(widget.foodCard.originalURL!, fit: BoxFit.cover)
-              : Center(child: Icon(Icons.restaurant, size: 48, color: colorScheme.outlineVariant)),
+          child: heroExperience != null
+              ? ExperiencePhoto(
+                  experience: heroExperience,
+                  width: MediaQuery.sizeOf(context).width,
+                  height: 220,
+                  borderRadius: 0,
+                )
+              : widget.foodCard.originalURL != null
+                  ? Image.network(
+                      widget.foodCard.originalURL!,
+                      fit: BoxFit.cover,
+                      webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                      errorBuilder: (context, error, stackTrace) => Center(
+                        child: Icon(
+                          Icons.restaurant,
+                          size: 48,
+                          color: colorScheme.outlineVariant,
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Icon(
+                        Icons.restaurant,
+                        size: 48,
+                        color: colorScheme.outlineVariant,
+                      ),
+                    ),
         ),
         Container(
           height: 60,

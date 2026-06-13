@@ -27,13 +27,11 @@ class ExperienceEntrySheet extends StatefulWidget {
 
 class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
   static const List<String> _quickTags = [
-    'cozy',
-    'date-night',
-    'quick-bite',
-    'splurge',
-    'vegan-friendly',
-    'good-for-groups',
-    'late-night',
+    '氣氛好',
+    '朋友聚餐',
+    'CP值高',
+    '平價',
+    '需要排隊',
   ];
 
   late final TextEditingController _placeController;
@@ -55,9 +53,33 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
   bool _isApplyingPlaceSelection = false;
   bool _isLocating = false;
   bool _isSubmitting = false;
+  bool _showPlaceRequiredHint = false;
 
   bool get _isEditing => widget.initialExperience != null;
   bool get _canSave => _rating > 0 && !_isSubmitting;
+  bool get _isPlaceEmpty => _placeController.text.trim().isEmpty;
+
+  List<String> get _quickAddTags {
+    final tags = <String>[];
+
+    void addTag(String rawTag) {
+      final tag = rawTag.trim();
+      if (tag.isEmpty || _tags.contains(tag) || tags.contains(tag)) return;
+      tags.add(tag);
+    }
+
+    for (final tag in _quickTags) {
+      addTag(tag);
+    }
+
+    for (final experience in widget.savedPlaceSuggestions) {
+      for (final tag in experience.personalTags) {
+        addTag(tag);
+      }
+    }
+
+    return tags;
+  }
 
   @override
   void initState() {
@@ -67,6 +89,7 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
     _noteController = TextEditingController(text: initial?.personalNote ?? '');
     _tagController = TextEditingController();
     _placeController.addListener(_onPlaceQueryChanged);
+    _showPlaceRequiredHint = _placeController.text.trim().isEmpty;
     _rating = initial?.personalRating ?? 0;
     _photoUrls = List<String>.from(initial?.photoUrls ?? const []);
     _tags = List<String>.from(initial?.personalTags ?? const []);
@@ -91,7 +114,7 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
   }
 
   void _addTag(String rawTag) {
-    final tag = rawTag.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-');
+    final tag = rawTag.trim().replaceAll(RegExp(r'\s+'), '-');
     if (tag.isEmpty || _tags.contains(tag)) return;
     setState(() {
       _tags.add(tag);
@@ -117,6 +140,10 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
     }
 
     final query = _placeController.text.trim();
+    if (_showPlaceRequiredHint != query.isEmpty) {
+      setState(() => _showPlaceRequiredHint = query.isEmpty);
+    }
+
     if (query.length < 2) {
       if (_placeSearchResults.isNotEmpty || _isSearchingPlaces) {
         setState(() {
@@ -453,6 +480,13 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
     setState(() => _isSubmitting = true);
 
     final initial = widget.initialExperience;
+    if (_isPlaceEmpty) {
+      setState(() => _showPlaceRequiredHint = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in the place name.')),
+      );
+    }
+
     final placeTitle = _placeController.text.trim().isEmpty
         ? 'Unknown Food Spot'
         : _placeController.text.trim();
@@ -474,6 +508,7 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
           latitude: _latitude,
           longitude: _longitude,
           originalURL: initial?.originalURL,
+          photoPaths: List.unmodifiable(initial?.photoPaths ?? const []),
           photoUrls: List.unmodifiable(_photoUrls),
           personalTags: List.unmodifiable(_tags),
           personalRating: _rating,
@@ -664,6 +699,16 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
                         places: _placeSearchResults,
                         onSelected: _selectPlace,
                       ),
+                      if (_showPlaceRequiredHint && _isPlaceEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Please fill in the place name so this meal is easier to find later.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.error,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       FilledButton.tonalIcon(
                         onPressed: _isLocating ? null : _useCurrentLocation,
@@ -692,26 +737,6 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.auto_awesome,
-                            size: 14,
-                            color: colorScheme.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Leave blank and Meow will use your GPS to figure it out.',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                       const SizedBox(height: 24),
                       _SectionLabel('Your tags'),
                       const SizedBox(height: 10),
@@ -772,8 +797,7 @@ class _ExperienceEntrySheetState extends State<ExperienceEntrySheet> {
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: _quickTags
-                            .where((tag) => !_tags.contains(tag))
+                        children: _quickAddTags
                             .map(
                               (tag) => ActionChip(
                                 label: Text('+ $tag'),
@@ -1156,6 +1180,7 @@ class _PhotoPreview extends StatelessWidget {
               width: 104,
               height: 104,
               fit: BoxFit.cover,
+              webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
               errorBuilder: (context, error, stackTrace) => Container(
                 width: 104,
                 height: 104,

@@ -1,22 +1,23 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:meow_food_butler/models/experience_card.dart';
 import 'package:meow_food_butler/models/food_card.dart';
 import 'package:meow_food_butler/views/saved/food_card_detail.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 
-class RestaurantListSheet extends StatelessWidget {
+class RestaurantListSheet extends StatefulWidget {
   static const double minSize = 0.07;
-  static const double initialSize = 0.42;
+  static const double middleSize = 0.42;
+  static const double initialSize = minSize;
   static const double maxSize = 0.86;
-  static const List<double> snapSizes = [minSize, initialSize, maxSize];
+  static const List<double> snapSizes = [minSize, middleSize, maxSize];
 
   final DraggableScrollableController controller;
   final List<ExperienceCard> experiences;
   final String? selectedExperienceId;
   final String Function(ExperienceCard experience) markerIdFor;
   final ValueChanged<ExperienceCard> onExperienceSelected;
-
+  final ValueChanged<ExperienceCard> onExperienceDetailRequested;
   const RestaurantListSheet({
     super.key,
     required this.controller,
@@ -24,7 +25,69 @@ class RestaurantListSheet extends StatelessWidget {
     required this.selectedExperienceId,
     required this.markerIdFor,
     required this.onExperienceSelected,
+    required this.onExperienceDetailRequested,
   });
+
+  @override
+  State<RestaurantListSheet> createState() => _RestaurantListSheetState();
+}
+
+class _RestaurantListSheetState extends State<RestaurantListSheet> {
+  static const double _headerScrollExtent = 82;
+  static const double _estimatedCardExtent = 134;
+
+  ScrollController? _scrollController;
+  String? _lastAutoScrolledId;
+
+  @override
+  void didUpdateWidget(covariant RestaurantListSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.selectedExperienceId != oldWidget.selectedExperienceId) {
+      _scheduleScrollToSelected();
+    }
+  }
+
+  void _scheduleScrollToSelected() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToSelectedExperience();
+    });
+  }
+
+  Future<void> _scrollToSelectedExperience() async {
+    final selectedId = widget.selectedExperienceId;
+    if (selectedId == null || selectedId == _lastAutoScrolledId) return;
+
+    final selectedIndex = widget.experiences.indexWhere(
+      (experience) => widget.markerIdFor(experience) == selectedId,
+    );
+    if (selectedIndex < 0) return;
+
+    _lastAutoScrolledId = selectedId;
+
+    if (widget.controller.isAttached &&
+        widget.controller.size < RestaurantListSheet.middleSize) {
+      await widget.controller.animateTo(
+        RestaurantListSheet.middleSize,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    final scrollController = _scrollController;
+    if (scrollController == null || !scrollController.hasClients) return;
+
+    final maxScroll = scrollController.position.maxScrollExtent;
+    final target = (_headerScrollExtent + selectedIndex * _estimatedCardExtent)
+        .clamp(0.0, maxScroll);
+
+    await scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   void _showRestaurantDetail(BuildContext context, ExperienceCard experience) {
     final relatedFoodCard = FoodCard(
@@ -86,14 +149,15 @@ class RestaurantListSheet extends StatelessWidget {
       alignment: Alignment.bottomCenter,
       child: PointerInterceptor(
         child: DraggableScrollableSheet(
-          controller: controller,
+          controller: widget.controller,
           expand: false,
           snap: true,
-          snapSizes: snapSizes,
-          initialChildSize: initialSize,
-          minChildSize: minSize,
-          maxChildSize: maxSize,
+          snapSizes: RestaurantListSheet.snapSizes,
+          initialChildSize: RestaurantListSheet.initialSize,
+          minChildSize: RestaurantListSheet.minSize,
+          maxChildSize: RestaurantListSheet.maxSize,
           builder: (context, scrollController) {
+            _scrollController = scrollController;
             return ScrollConfiguration(
               behavior: const _MapSheetScrollBehavior(),
               child: DecoratedBox(
@@ -110,7 +174,7 @@ class RestaurantListSheet extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: experiences.isEmpty
+                child: widget.experiences.isEmpty
                     ? _EmptyMapSheet(scrollController: scrollController)
                     : CustomScrollView(
                         controller: scrollController,
@@ -118,33 +182,35 @@ class RestaurantListSheet extends StatelessWidget {
                           parent: AlwaysScrollableScrollPhysics(),
                         ),
                         slivers: [
-                          SliverToBoxAdapter(
-                            child: _SheetHeader(
-                              count: experiences.length,
-                              controller: controller,
+                          SliverPersistentHeader(
+                            pinned: true,
+                            delegate: _SheetHeaderDelegate(
+                              count: widget.experiences.length,
+                              controller: widget.controller,
+                              backgroundColor: colorScheme.surface,
                             ),
                           ),
                           SliverPadding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
                             sliver: SliverList.separated(
-                              itemCount: experiences.length,
+                              itemCount: widget.experiences.length,
                               separatorBuilder: (context, index) =>
                                   const SizedBox(height: 10),
                               itemBuilder: (context, index) {
-                                final experience = experiences[index];
+                                final experience = widget.experiences[index];
                                 final selected =
-                                    markerIdFor(experience) ==
-                                    selectedExperienceId;
+                                    widget.markerIdFor(experience) ==
+                                    widget.selectedExperienceId;
 
                                 return _MapRestaurantCard(
                                   experience: experience,
                                   selected: selected,
                                   onTap: () {
-                                    onExperienceSelected(experience);
+                                    widget.onExperienceDetailRequested(experience);
                                     _showRestaurantDetail(context, experience);
                                   },
                                   onLocate: () =>
-                                      onExperienceSelected(experience),
+                                      widget.onExperienceSelected(experience),
                                 );
                               },
                             ),
@@ -170,6 +236,60 @@ class _MapSheetScrollBehavior extends MaterialScrollBehavior {
     PointerDeviceKind.trackpad,
     PointerDeviceKind.stylus,
   };
+}
+
+class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final int count;
+  final DraggableScrollableController controller;
+  final Color backgroundColor;
+
+  const _SheetHeaderDelegate({
+    required this.count,
+    required this.controller,
+    required this.backgroundColor,
+  });
+
+  static const double _height = 82;
+
+  @override
+  double get minExtent => _height;
+
+  @override
+  double get maxExtent => _height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: overlapsContent
+            ? [
+                BoxShadow(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .shadow
+                      .withValues(alpha: 0.10),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : null,
+      ),
+      child: _SheetHeader(count: count, controller: controller),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _SheetHeaderDelegate oldDelegate) {
+    return count != oldDelegate.count ||
+        controller != oldDelegate.controller ||
+        backgroundColor != oldDelegate.backgroundColor;
+  }
 }
 
 class _SheetHeader extends StatelessWidget {
@@ -266,147 +386,193 @@ class _MapRestaurantCard extends StatelessWidget {
         ? null
         : experience.photoUrls.first;
 
-    return Material(
-      color: selected
-          ? colorScheme.primaryContainer
-          : colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
+    return AnimatedScale(
+      scale: selected ? 1.015 : 1.0,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      child: AnimatedSlide(
+        offset: selected ? const Offset(0, -0.025) : Offset.zero,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        child: Material(
+          color: selected
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            onTap: onLocate,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected
-                  ? colorScheme.primary
-                  : colorScheme.outlineVariant,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: imageUrl == null
-                    ? Container(
-                        width: 70,
-                        height: 70,
-                        color: colorScheme.primary,
-                        child: Icon(
-                          Icons.restaurant,
-                          color: colorScheme.onPrimary,
-                        ),
-                      )
-                    : Image.network(
-                        imageUrl,
-                        width: 70,
-                        height: 70,
-                        fit: BoxFit.cover,
-                        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 70,
-                          height: 70,
-                          color: colorScheme.primary,
-                          child: Icon(
-                            Icons.restaurant,
-                            color: colorScheme.onPrimary,
-                          ),
-                        ),
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      experience.placeTitle ?? 'Unnamed restaurant',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.star,
-                          size: 16,
-                          color: Colors.amber.shade700,
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          experience.personalRating.toStringAsFixed(1),
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: Colors.amber.shade800,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        if (experience.region?.isNotEmpty == true) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            experience.region!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (experience.placeAddress?.isNotEmpty == true) ...[
-                      const SizedBox(height: 5),
-                      Text(
-                        experience.placeAddress!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    if (experience.personalTags.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: experience.personalTags.take(3).map((tag) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface,
-                              borderRadius: BorderRadius.circular(99),
-                              border: Border.all(
-                                color: colorScheme.outlineVariant,
-                              ),
-                            ),
-                            child: Text(
-                              '#$tag',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ],
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: selected
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
+                  width: selected ? 2 : 1,
                 ),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: colorScheme.primary.withOpacity(0.22),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ]
+                    : [],
               ),
-              IconButton(
-                onPressed: onLocate,
-                icon: const Icon(Icons.near_me),
-                tooltip: 'Show on map',
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 撌阡???嚗歲閰喟敦鞈?
+                  InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(14),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: imageUrl == null
+                          ? Container(
+                              width: 70,
+                              height: 70,
+                              color: colorScheme.primary,
+                              child: Icon(
+                                Icons.restaurant,
+                                color: colorScheme.onPrimary,
+                              ),
+                            )
+                          : Image.network(
+                              imageUrl,
+                              width: 70,
+                              height: 70,
+                              fit: BoxFit.cover,
+                              webHtmlElementStrategy:
+                                  WebHtmlElementStrategy.prefer,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                width: 70,
+                                height: 70,
+                                color: colorScheme.primary,
+                                child: Icon(
+                                  Icons.restaurant,
+                                  color: colorScheme.onPrimary,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  // 銝剝???嚗歲閰喟敦鞈?
+                  Expanded(
+                    child: InkWell(
+                      onTap: onTap,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              experience.placeTitle ?? 'Unnamed restaurant',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.star,
+                                  size: 16,
+                                  color: Colors.amber.shade700,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  experience.personalRating.toStringAsFixed(1),
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    color: Colors.amber.shade800,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                if (experience.region?.isNotEmpty == true) ...[
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    experience.region!,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (experience.placeAddress?.isNotEmpty ==
+                                true) ...[
+                              const SizedBox(height: 5),
+                              Text(
+                                experience.placeAddress!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                            if (experience.personalTags.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children:
+                                    experience.personalTags.take(3).map((tag) {
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.surface,
+                                      borderRadius: BorderRadius.circular(99),
+                                      border: Border.all(
+                                        color: colorScheme.outlineVariant,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '#$tag',
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // ?喲? icon嚗摰?
+                  IconButton(
+                    onPressed: onLocate,
+                    icon: Icon(
+                      Icons.near_me,
+                      color: selected
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                    ),
+                    tooltip: 'Show on map',
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
