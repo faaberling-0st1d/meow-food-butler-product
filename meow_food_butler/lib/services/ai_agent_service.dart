@@ -223,4 +223,13 @@ class AiAgentService {
     await Future.delayed(const Duration(seconds: 1));
     return "Draft Cafe 台北"; 
   }
+
+  Future<Map<String, dynamic>> importInstagram(String igUrl) async {
+    print("[DEBUG] importInstagram calling with url: $igUrl");
+    final result = await FirebaseFunctions.instanceFor(region: 'asia-east1')
+        .httpsCallable('importInstagram')
+        .call<Map<String, dynamic>>({'url': igUrl});
+    print("[DEBUG] importInstagram result: ${result.data}");
+    return result.data;
+  }
 }

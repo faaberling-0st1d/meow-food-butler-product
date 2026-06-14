@@ -14,6 +14,9 @@ const { defineRemember } = require("./remember");
 const { defineSearchSpots } = require("./search-spots");
 const { defineRouteDistance } = require("./route-distance");
 const { defineDraftExperience } = require("./draft-experience");
+// Instagram-to-JSON
+const { defineResolveInstagramRestaurant } = require("./resolve-instagram-restaurant");
+
 
 /**
  * Register all skills on a Genkit instance.
@@ -30,6 +33,8 @@ function registerTools(ai, opts = {}) {
     defineSearchSpots(ai),
     defineRouteDistance(ai),
     defineDraftExperience(ai),
+    /* Instagram-to-JSON */
+    defineResolveInstagramRestaurant(ai),
   ];
 }
 

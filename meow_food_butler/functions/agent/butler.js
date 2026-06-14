@@ -27,6 +27,11 @@ const SYSTEM_PROMPT = [
   "constraint, a place they enjoyed), call the remember tool to save it. Use recallMemory to",
   "personalize. Always respect the user's preferences and constraints from recallMemory.",
   "Keep replies concise and end with a cat sound.",
+  "When the user pastes an Instagram URL (reels or post), immediately call",
+  "resolveInstagramRestaurant with that URL. If it returns { error }, tell the",
+  "user what went wrong in one sentence and offer to let them enter the restaurant",
+  "name manually. If it succeeds, present the restaurant card (name, address,",
+  "rating, hours) and ask if they want to add it to their list.",
 ].join(" ");
 
 // Cache one Genkit instance + tool refs PER API key across warm invocations.

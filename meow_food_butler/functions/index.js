@@ -113,6 +113,50 @@ exports.chatWithButler = onCall(
   },
 );
 
+// functions/index.js（在你既有的 chatWithButler 旁邊加）
+// const { onCall } = require("firebase-functions/v2/https");
+const { defineResolveInstagramRestaurant } = require("./skills/resolve-instagram-restaurant");
+const { genkit } = require("genkit");
+const { googleAI } = require("@genkit-ai/googleai");
+/**
+ * Callable: `importInstagram()` -> { ok, missing, reply }.
+ *
+ * Lets the client post a heads-up in chat at startup when a required backend
+ * key isn't configured. `reply` is a ready-to-render, cat-toned message (or
+ * null when everything is configured).
+ */
+exports.importInstagram = onCall(
+  { 
+    region: "asia-east1",
+    timeoutSeconds: 300,
+    secrets: ["APIFY_TOKEN", "GOOGLE_PLACES_API_KEY", "OUTSCRAPER_API_KEY"]
+  },
+  async (request) => {
+    const { url } = request.data;
+
+    // Debug
+    logger.info("importInstagram called", { url });
+
+    if (!url) throw new Error("Missing url");
+
+    try {
+      const ai = genkit({ plugins: [googleAI()] });
+      const resolve = defineResolveInstagramRestaurant(ai);
+      const result = await resolve({ url });
+
+      // L2 agent 回傳 { error } 或完整的 Restaurant JSON
+      if (result.error) {
+        return { ok: false, error: result.error };
+      }
+      return { ok: true, data: result };
+
+    } catch(e) {
+      logger.error("importInstagram error", { message: e.message, stack: e.stack });
+      throw e;
+    }
+  }
+);
+
 /**
  * Callable: `checkApiKeys()` -> { ok, missing, reply }.
  *
