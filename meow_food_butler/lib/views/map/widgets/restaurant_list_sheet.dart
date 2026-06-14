@@ -4,6 +4,8 @@ import 'package:meow_food_butler/models/experience_card.dart';
 import 'package:meow_food_butler/models/food_card.dart';
 import 'package:meow_food_butler/views/saved/food_card_detail.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
+import 'package:provider/provider.dart';
+import 'package:meow_food_butler/view_models/saved_view_model.dart';
 
 enum MapSheetMode { imported, myPlaces }
 
@@ -29,6 +31,7 @@ class RestaurantListSheet extends StatefulWidget {
   final ValueChanged<MyPlacesSortMode> onSortModeChanged;
   final ValueChanged<ExperienceCard> onExperienceSelected;
   final ValueChanged<ExperienceCard> onExperienceDetailRequested;
+  final ValueChanged<String> onVisitsTapped;
 
   const RestaurantListSheet({
     super.key,
@@ -45,6 +48,7 @@ class RestaurantListSheet extends StatefulWidget {
     required this.onSortModeChanged,
     required this.onExperienceSelected,
     required this.onExperienceDetailRequested,
+    required this.onVisitsTapped,
   });
 
   @override
@@ -240,6 +244,7 @@ class _RestaurantListSheetState extends State<RestaurantListSheet> {
                               },
                               onLocate: () =>
                                   widget.onExperienceSelected(experience),
+                              onVisitsTapped: () => widget.onVisitsTapped(experience.placeTitle ?? ''),
                             );
                           },
                         ),
@@ -661,6 +666,7 @@ class _MapRestaurantCard extends StatelessWidget {
   final String? distanceLabel;
   final VoidCallback onTap;
   final VoidCallback onLocate;
+  final VoidCallback onVisitsTapped; 
 
   const _MapRestaurantCard({
     required this.experience,
@@ -669,6 +675,7 @@ class _MapRestaurantCard extends StatelessWidget {
     required this.distanceLabel,
     required this.onTap,
     required this.onLocate,
+    required this.onVisitsTapped,
   });
 
   @override
@@ -680,6 +687,10 @@ class _MapRestaurantCard extends StatelessWidget {
         : experience.photoUrls.first;
         
     final bool isOpen = true;
+
+    final allExperiences = context.watch<SavedViewModel>().experiences;
+    final targetKey = experience.foodCardId ?? experience.placeId ?? experience.placeTitle;
+    final visitCount = allExperiences.where((e) => (e.foodCardId ?? e.placeId ?? e.placeTitle) == targetKey).length;
 
     return AnimatedScale(
       scale: selected ? 1.006 : 1.0,
@@ -759,7 +770,7 @@ class _MapRestaurantCard extends StatelessWidget {
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -902,15 +913,49 @@ class _MapRestaurantCard extends StatelessWidget {
                     ),
                   ),
 
-                  IconButton(
-                    onPressed: onLocate,
-                    icon: Icon(
-                      Icons.near_me,
-                      color: selected
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                    ),
-                    tooltip: 'Show on map',
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        onPressed: onLocate,
+                        icon: Icon(
+                          Icons.near_me,
+                          color: selected
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                        tooltip: 'Show on map',
+                      ),
+                      if (visitCount > 0) ...[
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: onVisitsTapped,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: colorScheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.history, size: 12, color: colorScheme.onSecondaryContainer),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$visitCount',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSecondaryContainer,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
