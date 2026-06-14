@@ -10,6 +10,7 @@ import 'package:meow_food_butler/view_models/instagram_import_vm.dart';
 import 'package:meow_food_butler/view_models/saved_view_model.dart';
 import 'package:meow_food_butler/views/map/widgets/import_dialog.dart';
 import 'package:meow_food_butler/views/map/widgets/restaurant_list_sheet.dart';
+import 'package:meow_food_butler/views/saved/saved_screen.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:provider/provider.dart';
 
@@ -782,6 +783,13 @@ class _MainMapScreenState extends State<MainMapScreen> {
                 },
                 onExperienceDetailRequested: (experience) {
                   _selectExperience(experience, showInfoWindow: false);
+                },
+                onVisitsTapped: (placeTitle) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => SavedScreen(initialSearchQuery: placeTitle),
+                    ),
+                  );
                 },
               ),
               AnimatedBuilder(

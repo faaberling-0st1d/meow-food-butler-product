@@ -7,7 +7,9 @@ import 'package:meow_food_butler/views/saved/widgets/experience_photo.dart';
 import 'package:provider/provider.dart';
 
 class SavedScreen extends StatefulWidget {
-  const SavedScreen({super.key});
+  final String? initialSearchQuery;
+
+  const SavedScreen({super.key, this.initialSearchQuery});
 
   @override
   State<SavedScreen> createState() => _SavedScreenState();
@@ -22,9 +24,24 @@ class _SavedScreenState extends State<SavedScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialSearchQuery != null && widget.initialSearchQuery!.isNotEmpty) {
+      _searchController.text = widget.initialSearchQuery!;
+      _query = widget.initialSearchQuery!.toLowerCase();
+    }
+    
     _searchController.addListener(() {
       setState(() => _query = _searchController.text.trim().toLowerCase());
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant SavedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialSearchQuery != oldWidget.initialSearchQuery &&
+        widget.initialSearchQuery != null) {
+      _searchController.text = widget.initialSearchQuery!;
+      _query = widget.initialSearchQuery!.toLowerCase();
+    }
   }
 
   @override
