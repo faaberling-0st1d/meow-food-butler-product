@@ -7,7 +7,9 @@ import 'package:meow_food_butler/views/saved/widgets/experience_card_tile.dart';
 import 'package:provider/provider.dart';
 
 class SavedScreen extends StatefulWidget {
-  const SavedScreen({super.key});
+  final String? initialSearchQuery;
+
+  const SavedScreen({super.key, this.initialSearchQuery});
 
   @override
   State<SavedScreen> createState() => _SavedScreenState();
@@ -22,9 +24,24 @@ class _SavedScreenState extends State<SavedScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialSearchQuery != null && widget.initialSearchQuery!.isNotEmpty) {
+      _searchController.text = widget.initialSearchQuery!;
+      _query = widget.initialSearchQuery!.toLowerCase();
+    }
+    
     _searchController.addListener(() {
       setState(() => _query = _searchController.text.trim().toLowerCase());
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant SavedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialSearchQuery != oldWidget.initialSearchQuery &&
+        widget.initialSearchQuery != null) {
+      _searchController.text = widget.initialSearchQuery!;
+      _query = widget.initialSearchQuery!.toLowerCase();
+    }
   }
 
   @override
@@ -442,4 +459,61 @@ String? _regionFromLocationText(List<String?> values) {
   }
 
   return null;
+}
+
+class _MiniStarRow extends StatelessWidget {
+  final double rating;
+
+  const _MiniStarRow({required this.rating});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(
+        5,
+        (index) => Padding(
+          padding: const EdgeInsets.only(right: 1),
+          child: _MiniPartialStar(fill: (rating - index).clamp(0.0, 1.0)),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniPartialStar extends StatelessWidget {
+  final double fill;
+
+  const _MiniPartialStar({required this.fill});
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 14.0;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        children: [
+          Icon(Icons.star_border, size: size, color: Colors.blueGrey.shade200),
+          ClipRect(
+            clipper: _WidthClipper(fill),
+            child: Icon(Icons.star, size: size, color: Colors.amber.shade600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WidthClipper extends CustomClipper<Rect> {
+  final double factor;
+
+  const _WidthClipper(this.factor);
+
+  @override
+  Rect getClip(Size size) {
+    return Rect.fromLTWH(0, 0, size.width * factor, size.height);
+  }
+
+  @override
+  bool shouldReclip(_WidthClipper oldClipper) => oldClipper.factor != factor;
 }
