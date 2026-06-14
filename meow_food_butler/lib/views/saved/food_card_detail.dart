@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/food_card.dart';
 import '../../models/experience_card.dart';
@@ -90,9 +91,14 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 32),
               physics: const BouncingScrollPhysics(),
-              child: widget.showOnlineInfoTab 
-                  ? _buildOnlineInfoSection(colorScheme)
-                  : const SizedBox.shrink(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.showOnlineInfoTab) 
+                    _buildOnlineInfoSection(colorScheme),
+                  _buildSourceLinkSection(colorScheme, currentExperiences),
+                ],
+              ),
             ),
           ),
         ],
@@ -330,7 +336,6 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    // Google Stars
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -369,7 +374,6 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    // My Avg Badge
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
@@ -482,6 +486,94 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
         const SizedBox(height: 12),
         ..._demoReviews.map((review) => _buildReviewCard(review, colorScheme)),
       ],
+    );
+  }
+
+  Widget _buildSourceLinkSection(ColorScheme colorScheme, List<ExperienceCard> currentExperiences) {
+    String? url = widget.foodCard.originalURL;
+    if (url == null || url.trim().isEmpty) {
+      for (final exp in currentExperiences) {
+        if (exp.originalURL != null && exp.originalURL!.trim().isNotEmpty) {
+          url = exp.originalURL;
+          break;
+        }
+      }
+    }
+
+    if (url == null || url.trim().isEmpty) return const SizedBox.shrink();
+
+    final isIG = url.contains('instagram.com');
+
+    return Padding(
+      padding: EdgeInsets.only(top: widget.showOnlineInfoTab ? 24.0 : 0.0),
+      child: InkWell(
+        onTap: () async {
+          final uri = Uri.parse(url!);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication); 
+          } else {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Could not open the link.')),
+              );
+            }
+          }
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colorScheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isIG ? Icons.camera_alt : Icons.link,
+                  color: colorScheme.onPrimaryContainer,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isIG ? 'View Instagram Post' : 'View Original Source',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      url,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Icon(
+                Icons.open_in_new,
+                size: 20,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
