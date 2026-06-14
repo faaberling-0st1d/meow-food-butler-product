@@ -124,17 +124,18 @@ class _RestaurantListSheetState extends State<RestaurantListSheet> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.9,
+          initialChildSize: 1.0,
           minChildSize: 0.5,
-          maxChildSize: 0.95,
+          maxChildSize: 1.0,
           builder: (_, controller) {
             return ClipRRect(
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
+                top: Radius.circular(20),
               ),
               child: FoodCardDetail(
                 foodCard: relatedFoodCard,
