@@ -113,9 +113,7 @@ class _RestaurantListSheetState extends State<RestaurantListSheet> {
   void _showRestaurantDetail(BuildContext context, ExperienceCard experience) {
     final relatedFoodCard = FoodCard(
       id: experience.foodCardId,
-      originalURL: experience.photoUrls.isNotEmpty
-          ? experience.photoUrls.first
-          : experience.originalURL,
+      originalURL: experience.originalURL,
       formattedAddress: experience.placeAddress,
       rating: experience.personalRating,
       displayNames: [
