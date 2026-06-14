@@ -6,6 +6,7 @@ enum ChatMessageType {
   text,           // Plain user or AI text bubbles
   recommendation, // Special layout containing a button linking to the swipe stack
   actionTimeline, // System messages (e.g., "AI Cat scheduled Friday at 7:00 PM")
+  experienceCard, // Inline dining-log card (references an ExperienceCard by id)
 }
 
 class ChatMessage {
@@ -18,6 +19,7 @@ class ChatMessage {
   // Payload for interactive recommendation structures
   final List<String>? recommendedSpotIds; // References to FoodCard IDs generated for the stack
   final String? calendarEventId;         // Reference key if an event was pushed to Google Calendar
+  final String? experienceId;            // Linked ExperienceCard id (client-injected card)
 
   ChatMessage({
     this.id,
@@ -27,6 +29,7 @@ class ChatMessage {
     Timestamp? timestamp,
     this.recommendedSpotIds,
     this.calendarEventId,
+    this.experienceId,
   }) : timestamp = timestamp ?? Timestamp.now();
 
   /// Checks if the message belongs to the current user or the active AI butler
@@ -56,6 +59,7 @@ class ChatMessage {
           ? List<String>.from(map['recommendedSpotIds'] as List<dynamic>)
           : null,
       calendarEventId: map['calendarEventId'] as String?,
+      experienceId: map['experienceId'] as String?,
     );
   }
 
@@ -67,6 +71,7 @@ class ChatMessage {
       'timestamp': timestamp,
       if (recommendedSpotIds != null) 'recommendedSpotIds': recommendedSpotIds,
       if (calendarEventId != null) 'calendarEventId': calendarEventId,
+      if (experienceId != null) 'experienceId': experienceId,
     };
   }
 
@@ -87,7 +92,8 @@ class ChatMessage {
         other.type == type &&
         other.timestamp == timestamp &&
         listEquals(other.recommendedSpotIds, recommendedSpotIds) &&
-        other.calendarEventId == calendarEventId;
+        other.calendarEventId == calendarEventId &&
+        other.experienceId == experienceId;
   }
 
   @override
@@ -100,6 +106,7 @@ class ChatMessage {
       timestamp,
       recommendedSpotIds != null ? Object.hashAll(recommendedSpotIds!) : null,
       calendarEventId,
+      experienceId,
     );
   }
 }

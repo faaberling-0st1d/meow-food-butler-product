@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:meow_food_butler/models/chat_message.dart';
 import 'package:meow_food_butler/models/chat_session.dart';
 import 'package:meow_food_butler/services/ai_agent_service.dart';
+import 'package:meow_food_butler/view_models/saved_view_model.dart';
+import 'package:meow_food_butler/views/saved/experience_detail_screen.dart';
+import 'package:meow_food_butler/views/saved/widgets/experience_card_tile.dart';
+import 'package:provider/provider.dart';
 
 class ChatScreen extends StatelessWidget {
   const ChatScreen({super.key});
@@ -31,9 +35,36 @@ class _ChatState extends State<Chat> {
   }
 
   void _send() {
-    if (_textController.text.trim().isNotEmpty) {
-      _chatService.fetchPromptResponse(_textController.text.trim());
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+
+    // Client-only command: show the latest dining log as a card (no backend).
+    // `/latest-card` shows the most recent meal; `/latest-card ramen` shows the
+    // most recent meal matching "ramen" (place name / tag / note).
+    final lower = text.toLowerCase();
+    if (lower == '/latest-card' || lower.startsWith('/latest-card ')) {
+      final query = text.substring('/latest-card'.length).trim();
+      _showLatestCard(query: query.isEmpty ? null : query);
       _textController.clear();
+      return;
+    }
+
+    _chatService.fetchPromptResponse(text);
+    _textController.clear();
+  }
+
+  /// Inject the most recent logged experience (optionally matching [query]) into
+  /// the chat as a tappable card, or a friendly note when there's no match.
+  void _showLatestCard({String? query}) {
+    final latest = context.read<SavedViewModel>().latestExperience(
+          query: query,
+        );
+
+    if (latest == null) {
+      final what = query == null ? 'any meals' : 'a "$query" meal';
+      _chatService.showLocalText("You haven't logged $what yet, nya 🐱");
+    } else {
+      _chatService.showExperienceCard(latest.id!);
     }
   }
 
@@ -89,9 +120,18 @@ class _ChatState extends State<Chat> {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
                 }
-                // Only show conversational messages (hide developer/system).
+                // Only show conversational messages (hide developer/system),
+                // and drop blank bubbles — a tool-driven turn can come back with
+                // whitespace-only text, which would render as an empty "space"
+                // bubble. Experience cards carry no text, so keep those.
                 final messages = (snapshot.data ?? const <ChatMessage>[])
                     .where((m) => m.role == 'user' || m.role == 'assistant')
+                    .where(
+                      (m) =>
+                          (m.type == ChatMessageType.experienceCard &&
+                              m.experienceId != null) ||
+                          m.text.trim().isNotEmpty,
+                    )
                     .toList();
                 if (messages.isEmpty) {
                   return Center(
@@ -110,6 +150,12 @@ class _ChatState extends State<Chat> {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
+                    if (message.type == ChatMessageType.experienceCard &&
+                        message.experienceId != null) {
+                      return _ExperienceCardBubble(
+                        experienceId: message.experienceId!,
+                      );
+                    }
                     return _MessageBubble(
                       text: message.text,
                       isMe: message.role == 'user',
@@ -175,6 +221,56 @@ class _MessageBubble extends StatelessWidget {
             children: _parseInlineMarkdown(text),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// An inline dining-log card in the chat. Resolves the [ExperienceCard] live
+/// from [SavedViewModel] by id, so edits/deletes reflect immediately. Tapping it
+/// opens the same [ExperienceDetailScreen] as the Saved screen.
+class _ExperienceCardBubble extends StatelessWidget {
+  const _ExperienceCardBubble({required this.experienceId});
+
+  final String experienceId;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final experience = context.watch<SavedViewModel>().experienceById(
+          experienceId,
+        );
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.82,
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+        child: experience == null
+            ? Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: colorScheme.outlineVariant),
+                ),
+                child: Text(
+                  'This meal is no longer available.',
+                  style: TextStyle(color: colorScheme.onSurfaceVariant),
+                ),
+              )
+            : ExperienceCardTile(
+                experience: experience,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        ExperienceDetailScreen(experienceId: experienceId),
+                  ),
+                ),
+              ),
       ),
     );
   }

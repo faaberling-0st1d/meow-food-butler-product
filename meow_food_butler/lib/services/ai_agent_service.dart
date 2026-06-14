@@ -27,9 +27,10 @@ class ChatService {
   String? _sessionId;
   StreamSubscription<List<ChatMessage>>? _messagesSub;
 
-  // Three layers, all newest-first; combined on every emit.
+  // Four layers, all newest-first; combined on every emit.
   List<ChatMessage> _notices = []; // sticky (e.g. startup key warning)
   List<ChatMessage> _pending = []; // transient optimistic / error overlay
+  List<ChatMessage> _local = []; // client-injected UI (e.g. /latest-card), not persisted
   List<ChatMessage> _firestore = []; // persisted, from the message stream
 
   ChatService({ChatRepository? repository})
@@ -43,7 +44,29 @@ class ChatService {
   Stream<List<ChatMessage>> get messagesStream => _out.stream;
 
   /// Seeds [StreamBuilder.initialData] so the UI has data immediately.
-  List<ChatMessage> get messages => [..._notices, ..._pending, ..._firestore];
+  List<ChatMessage> get messages => _composed();
+
+  /// Merge the buffers into the single newest-first list the view renders.
+  ///
+  /// `_pending`, `_local`, and `_firestore` share ONE timeline ordered by
+  /// timestamp, so a client-injected card (`_local`) sits where it was shown in
+  /// time rather than in a fixed layer. Previously the card lived in a layer
+  /// that always sorted between `_pending` and `_firestore`; when a turn moved
+  /// from the optimistic overlay to the persisted stream it crossed to the
+  /// other side of the card, making the card jump up/down. `_notices` (the
+  /// sticky key warning) stays pinned at the bottom.
+  List<ChatMessage> _composed() {
+    final timeline = [..._pending, ..._local, ..._firestore];
+    // Stable newest-first sort: Dart's List.sort isn't stable, so decorate with
+    // the original index and break ties on it. That keeps equal-timestamp items
+    // (e.g. the optimistic user+assistant pair) in their intended order.
+    final order = List<int>.generate(timeline.length, (i) => i);
+    order.sort((a, b) {
+      final byTime = timeline[b].timestamp.compareTo(timeline[a].timestamp);
+      return byTime != 0 ? byTime : a.compareTo(b);
+    });
+    return [..._notices, ...order.map((i) => timeline[i])];
+  }
 
   /// The session list for the history drawer (newest activity first).
   Stream<List<ChatSession>> get sessionsStream => _repo.watchSessions();
@@ -68,6 +91,7 @@ class ChatService {
     if (_sessionId == sessionId) return;
     _sessionId = sessionId;
     _pending = [];
+    _local = [];
     _firestore = [];
     _emit();
     await _messagesSub?.cancel();
@@ -91,6 +115,7 @@ class ChatService {
       _messagesSub = null;
       _sessionId = null;
       _pending = [];
+      _local = [];
       _firestore = [];
       _emit();
     }
@@ -106,18 +131,23 @@ class ChatService {
     if (_sessionId == null) await startNewSession();
   }
 
-  List<ChatMessage> _optimistic(String prompt, String assistantText) => [
-        ChatMessage(
-          senderId: 'ai_agent',
-          messageText: assistantText,
-          type: ChatMessageType.text,
-        ),
-        ChatMessage(
-          senderId: 'user',
-          messageText: prompt,
-          type: ChatMessageType.text,
-        ),
-      ];
+  List<ChatMessage> _optimistic(String prompt, String assistantText) {
+    // Construct the user turn FIRST so it gets the earlier timestamp; the
+    // assistant reply (constructed next) is newer and sorts below it in
+    // [_composed]. The returned order is newest-first and also acts as the
+    // tie-break when the two timestamps land in the same instant.
+    final user = ChatMessage(
+      senderId: 'user',
+      messageText: prompt,
+      type: ChatMessageType.text,
+    );
+    final assistant = ChatMessage(
+      senderId: 'ai_agent',
+      messageText: assistantText,
+      type: ChatMessageType.text,
+    );
+    return [assistant, user];
+  }
 
   Future<void> fetchPromptResponse(String prompt) async {
     // Resolve location FIRST, before any network await (session creation). On
@@ -165,6 +195,9 @@ class ChatService {
         // Backend persisted user + assistant; the Firestore stream delivers
         // them. Drop the optimistic overlay.
         _pending = [];
+        // Apply any client UI actions the agent requested this turn (e.g. show
+        // a dining-log card its viewDiningLog tool looked up).
+        _applyActions(data['actions']);
       } else {
         // Not persisted on the backend (e.g. quota / key error) — keep the
         // user's message and show the returned reply as a transient bubble.
@@ -203,7 +236,56 @@ class ChatService {
     }
   }
 
-  void _emit() => _out.add([..._notices, ..._pending, ..._firestore]);
+  /// Apply client UI actions returned by `chatWithButler`. Currently just
+  /// `showExperienceCard` — the agent's `viewDiningLog` tool resolves a logged
+  /// meal and asks the client to inject its card by id, so natural-language
+  /// requests ("the last time I ate ramen") land on the same path as the
+  /// `/latest-card` command. Cloud Functions decodes nested JSON as
+  /// `List`/`Map<Object?, Object?>`, so match loosely.
+  void _applyActions(dynamic actions) {
+    if (actions is! List) return;
+    final seen = <String>{}; // dedupe repeated cards within one turn
+    for (final action in actions) {
+      if (action is! Map) continue;
+      if (action['type'] == 'showExperienceCard') {
+        final id = action['experienceId'];
+        if (id is String && id.isNotEmpty && seen.add(id)) {
+          showExperienceCard(id);
+        }
+      }
+    }
+  }
+
+  /// Inject a dining-log card into the chat locally (no backend call). The card
+  /// references an [ExperienceCard] by id; the view resolves it live from
+  /// `SavedViewModel`. Ephemeral: cleared when the session changes.
+  void showExperienceCard(String experienceId) {
+    _local = [
+      ChatMessage(
+        senderId: 'ai_agent',
+        messageText: '',
+        type: ChatMessageType.experienceCard,
+        experienceId: experienceId,
+      ),
+      ..._local,
+    ];
+    _emit();
+  }
+
+  /// Inject a plain assistant text bubble locally (e.g. "no meals logged yet").
+  void showLocalText(String text) {
+    _local = [
+      ChatMessage(
+        senderId: 'ai_agent',
+        messageText: text,
+        type: ChatMessageType.text,
+      ),
+      ..._local,
+    ];
+    _emit();
+  }
+
+  void _emit() => _out.add(_composed());
 
   void dispose() {
     _messagesSub?.cancel();

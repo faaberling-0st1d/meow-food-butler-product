@@ -263,6 +263,7 @@ class _RestaurantShareCard extends StatelessWidget {
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
+        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
         errorBuilder: (context, error, stackTrace) {
           if (data.photoPath != null && data.photoPath!.isNotEmpty) {
             return _StoragePathImage(
@@ -438,6 +439,7 @@ class _StoragePathImage extends StatelessWidget {
           width: width,
           height: height,
           fit: fit,
+          webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
           errorBuilder: (context, error, stackTrace) => fallback,
         );
       },

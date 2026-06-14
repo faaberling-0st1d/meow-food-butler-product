@@ -64,6 +64,41 @@ class SavedViewModel extends ChangeNotifier {
     return null;
   }
 
+  /// The most recently logged experience, optionally filtered to those matching
+  /// [query] (case-insensitive) by place name, tags, or note. Returns null when
+  /// nothing matches.
+  ///
+  /// Backs the chat assistant's dining-log cards: no [query] answers "show my
+  /// last meal", and a [query] like "ramen" answers "find the last time I ate
+  /// ramen". Kept here (not in the view) so the matching rules live with the
+  /// experience data.
+  ExperienceCard? latestExperience({String? query}) {
+    final needle = query?.trim().toLowerCase();
+    ExperienceCard? latest;
+    for (final exp in _experiences) {
+      if (exp.id == null) continue;
+      if (needle != null && needle.isNotEmpty && !_matchesQuery(exp, needle)) {
+        continue;
+      }
+      if (latest == null ||
+          exp.createdTime.compareTo(latest.createdTime) > 0) {
+        latest = exp;
+      }
+    }
+    return latest;
+  }
+
+  /// Whether [exp] matches an already-lowercased [needle] on its place name,
+  /// any tag, or its note.
+  bool _matchesQuery(ExperienceCard exp, String needle) {
+    if ((exp.placeTitle ?? '').toLowerCase().contains(needle)) return true;
+    if ((exp.personalNote ?? '').toLowerCase().contains(needle)) return true;
+    for (final tag in exp.personalTags) {
+      if (tag.toLowerCase().contains(needle)) return true;
+    }
+    return false;
+  }
+
   Future<void> addExperience(
     ExperienceCard experience, {
     List<XFile> photos = const [],

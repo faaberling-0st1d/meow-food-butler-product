@@ -16,6 +16,7 @@ const { defineSetPreference } = require("./set-preference");
 const { defineSearchSpots } = require("./search-spots");
 const { defineRouteDistance } = require("./route-distance");
 const { defineDraftExperience } = require("./draft-experience");
+const { defineViewDiningLog } = require("./view-dining-log");
 
 /**
  * Register all skills on a Genkit instance.
@@ -34,6 +35,7 @@ function registerTools(ai, opts = {}) {
     defineSearchSpots(ai, { placesApiKey: opts.placesApiKey || "" }),
     defineRouteDistance(ai),
     defineDraftExperience(ai),
+    defineViewDiningLog(ai),
   ];
 }
 

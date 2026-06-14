@@ -9,6 +9,7 @@
  *   users/{uid}/sessions/{sessionId}/messages/{m} { role, text, createdAt }
  *   users/{uid}/memory/{m}                         { text, kind, embedding, … }
  *   users/{uid}/preferences/profile                { likes, dislikes, maxWalkMinutes }
+ *   users/{uid}/experiences/{e}                    { placeTitle, personalTags, createdTime, … }
  */
 
 const admin = require("firebase-admin");
@@ -30,6 +31,9 @@ const messagesCol = (uid, sessionId) =>
   sessionsCol(uid).doc(sessionId).collection("messages");
 const memoryCol = (uid) => userRef(uid).collection("memory");
 const prefsDoc = (uid) => userRef(uid).collection("preferences").doc("profile");
+// Saved dining-log cards. Written by the client (ExperienceRepository); the
+// agent reads them to answer "show my last meal" / "the last time I ate X".
+const experiencesCol = (uid) => userRef(uid).collection("experiences");
 
 // Server-only config (e.g. rotating API keys). Locked from clients in
 // firestore.rules; the Admin SDK here bypasses rules. Edit via the console.
@@ -44,5 +48,6 @@ module.exports = {
   messagesCol,
   memoryCol,
   prefsDoc,
+  experiencesCol,
   configDoc,
 };

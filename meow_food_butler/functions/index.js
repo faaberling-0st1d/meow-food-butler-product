@@ -103,9 +103,17 @@ exports.chatWithButler = onCall(
     });
 
     // Persist the exchange only on success, so errors don't litter history.
+    // Skip a blank/whitespace-only assistant reply (it happens when the model
+    // leans entirely on a tool's UI action) so it never shows as an empty
+    // bubble or gets replayed as context.
     if (result.ok) {
       await sessions.appendMessage(userId, sessionId, { role: "user", text: prompt });
-      await sessions.appendMessage(userId, sessionId, { role: "assistant", text: result.reply });
+      if (typeof result.reply === "string" && result.reply.trim() !== "") {
+        await sessions.appendMessage(userId, sessionId, {
+          role: "assistant",
+          text: result.reply,
+        });
+      }
     }
 
     logger.info("chatWithButler result", { code: result.code, ok: result.ok });
