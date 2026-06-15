@@ -178,6 +178,28 @@ class RestaurantRepository {
     return docRef.id;
   }
 
+  Future<void> deleteRestaurant(String id) async {
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+
+    final docRef = _collection.doc(cleanId);
+    final doc = await docRef.get();
+    final data = doc.data();
+    final photoPaths =
+        (data?['photoPaths'] as List?)?.whereType<String>().toList() ??
+            const <String>[];
+
+    for (final path in photoPaths) {
+      try {
+        await _storage.ref(path).delete();
+      } catch (_) {
+        // Non-fatal: Firestore should still reflect the user's delete action.
+      }
+    }
+
+    await docRef.delete();
+  }
+
   /// Downloads any external photo URLs into Firebase Storage under
   /// `users/{uid}/restaurants/{id}/photos/…` and returns the Storage paths +
   /// download URLs. Idempotent: if the doc was already mirrored on a previous

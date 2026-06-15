@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/food_card.dart';
 import '../../models/experience_card.dart';
+import '../../services/business_hours_service.dart';
 import '../../view_models/saved_view_model.dart';
 
 import 'widgets/experience_photo.dart';
@@ -931,37 +932,20 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
   }
 
   String? _todayHoursLabel() {
-    final hours = widget.foodCard.workingHours;
-    if (hours == null || hours.isEmpty) return null;
+    return BusinessHoursService.todayHoursLabel(widget.foodCard.workingHours);
+  }
 
-    const keys = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
-
-    for (final key in keys) {
-      final value = hours[key];
-      if (value == null) continue;
-      if (value is String && value.trim().isNotEmpty) return '$key $value';
-      if (value is List && value.isNotEmpty) return '$key ${value.join(", ")}';
-    }
-
-    return hours.entries
-        .take(2)
-        .map((entry) => '${entry.key}: ${entry.value}')
-        .join(' · ');
+  List<String> _weekdayKeys(int weekday) {
+    const keys = {
+      1: ['Monday', 'Mon', '\u661f\u671f\u4e00', '\u9031\u4e00', '\u5468\u4e00'],
+      2: ['Tuesday', 'Tue', '\u661f\u671f\u4e8c', '\u9031\u4e8c', '\u5468\u4e8c'],
+      3: ['Wednesday', 'Wed', '\u661f\u671f\u4e09', '\u9031\u4e09', '\u5468\u4e09'],
+      4: ['Thursday', 'Thu', '\u661f\u671f\u56db', '\u9031\u56db', '\u5468\u56db'],
+      5: ['Friday', 'Fri', '\u661f\u671f\u4e94', '\u9031\u4e94', '\u5468\u4e94'],
+      6: ['Saturday', 'Sat', '\u661f\u671f\u516d', '\u9031\u516d', '\u5468\u516d'],
+      7: ['Sunday', 'Sun', '\u661f\u671f\u65e5', '\u661f\u671f\u5929', '\u9031\u65e5', '\u5468\u65e5'],
+    };
+    return keys[weekday] ?? const [];
   }
 
   List<_PopularTimePoint> _popularTimeBarsForToday() {
@@ -1014,17 +998,22 @@ class _FoodCardDetailState extends State<FoodCardDetail> {
   Map<String, dynamic>? _selectPopularTimeDay(List<dynamic> days) {
     if (days.isEmpty) return null;
     final weekday = DateTime.now().weekday;
-    final googleDay = weekday == 7 ? 7 : weekday;
+    final todayKeys = _weekdayKeys(
+      weekday,
+    ).map((key) => key.toLowerCase()).toList();
 
     for (final item in days.whereType<Map>()) {
-      if ((item['day'] as num?)?.toInt() == googleDay) {
+      if ((item['day'] as num?)?.toInt() == weekday) {
+        return Map<String, dynamic>.from(item);
+      }
+
+      final dayText = item['day_text']?.toString().trim().toLowerCase();
+      if (dayText != null &&
+          todayKeys.any((key) => dayText == key || dayText.contains(key))) {
         return Map<String, dynamic>.from(item);
       }
     }
 
-    for (final item in days.whereType<Map>()) {
-      return Map<String, dynamic>.from(item);
-    }
     return null;
   }
 }
@@ -1133,7 +1122,7 @@ class _FoodPhotoPreviewScreenState extends State<_FoodPhotoPreviewScreen> {
                   foregroundColor: Colors.white,
                 ),
                 icon: const Icon(Icons.close),
-                tooltip: '關閉',
+                tooltip: 'Close',
               ),
             ),
             Positioned(
@@ -1177,7 +1166,7 @@ class _FoodPhotoPreviewScreenState extends State<_FoodPhotoPreviewScreen> {
                       disabledForegroundColor: Colors.white38,
                     ),
                     icon: const Icon(Icons.chevron_left),
-                    tooltip: '上一張',
+                    tooltip: 'Previous photo',
                   ),
                 ),
               ),
@@ -1195,7 +1184,7 @@ class _FoodPhotoPreviewScreenState extends State<_FoodPhotoPreviewScreen> {
                       disabledForegroundColor: Colors.white38,
                     ),
                     icon: const Icon(Icons.chevron_right),
-                    tooltip: '下一張',
+                    tooltip: 'Next photo',
                   ),
                 ),
               ),

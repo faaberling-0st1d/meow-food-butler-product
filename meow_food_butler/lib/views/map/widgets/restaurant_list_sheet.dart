@@ -4,6 +4,7 @@ import 'package:meow_food_butler/models/experience_card.dart';
 import 'package:meow_food_butler/models/food_card.dart';
 import 'package:meow_food_butler/repositories/experience_repository.dart';
 import 'package:meow_food_butler/repositories/restaurant_repository.dart';
+import 'package:meow_food_butler/services/business_hours_service.dart';
 import 'package:meow_food_butler/services/restaurant_lookup_service.dart';
 import 'package:meow_food_butler/views/saved/food_card_detail.dart';
 import 'package:meow_food_butler/views/saved/widgets/experience_photo.dart';
@@ -17,9 +18,9 @@ enum MyPlacesSortMode { distance, recent }
 
 class RestaurantListSheet extends StatefulWidget {
   static const double minSize = 0.07;
-  static const double middleSize = 0.34;
+  static const double middleSize = 0.36;
   static const double initialSize = minSize;
-  static const double maxSize = 0.68;
+  static const double maxSize = 0.92;
   static const List<double> snapSizes = [minSize, middleSize, maxSize];
 
   final DraggableScrollableController controller;
@@ -31,11 +32,13 @@ class RestaurantListSheet extends StatefulWidget {
   final String? selectedExperienceId;
   final String Function(ExperienceCard experience) markerIdFor;
   final String? Function(ExperienceCard experience) distanceLabelFor;
+  final BusinessHoursStatus? Function(ExperienceCard experience) hoursStatusFor;
   final ValueChanged<MapSheetMode> onModeChanged;
   final ValueChanged<MyPlacesSortMode> onSortModeChanged;
   final ValueChanged<ExperienceCard> onExperienceSelected;
   final ValueChanged<ExperienceCard> onExperienceDetailRequested;
   final ValueChanged<String> onVisitsTapped;
+  final ValueChanged<ExperienceCard> onImportedDelete;
 
   const RestaurantListSheet({
     super.key,
@@ -48,11 +51,13 @@ class RestaurantListSheet extends StatefulWidget {
     required this.selectedExperienceId,
     required this.markerIdFor,
     required this.distanceLabelFor,
+    required this.hoursStatusFor,
     required this.onModeChanged,
     required this.onSortModeChanged,
     required this.onExperienceSelected,
     required this.onExperienceDetailRequested,
     required this.onVisitsTapped,
+    required this.onImportedDelete,
   });
 
   @override
@@ -60,7 +65,7 @@ class RestaurantListSheet extends StatefulWidget {
 }
 
 class _RestaurantListSheetState extends State<RestaurantListSheet> {
-  static const double _estimatedCardExtent = 96;
+  static const double _estimatedCardExtent = 126;
 
   ScrollController? _scrollController;
   String? _lastAutoScrolledId;
@@ -363,13 +368,18 @@ class _RestaurantListSheetState extends State<RestaurantListSheet> {
                               selected: selected,
                               mode: widget.mode,
                               distanceLabel: widget.distanceLabelFor(experience),
+                              hoursStatus: widget.hoursStatusFor(experience),
                               onTap: () {
                                 widget.onExperienceDetailRequested(experience);
                                 _showRestaurantDetail(context, experience);
                               },
                               onLocate: () =>
                                   widget.onExperienceSelected(experience),
-                              onVisitsTapped: () => widget.onVisitsTapped(experience.placeTitle ?? ''),
+                              onVisitsTapped: () => widget.onVisitsTapped(
+                                experience.placeTitle ?? '',
+                              ),
+                              onDeleteImported: () =>
+                                  widget.onImportedDelete(experience),
                             );
                           },
                         ),
@@ -523,6 +533,15 @@ class _SheetHeader extends StatelessWidget {
     );
   }
 
+  void _expandSheet() {
+    if (!controller.isAttached) return;
+    controller.animateTo(
+      RestaurantListSheet.maxSize,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -535,6 +554,7 @@ class _SheetHeader extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onVerticalDragUpdate: (details) => _dragSheet(context, details),
       onVerticalDragEnd: (_) => _snapSheet(),
+      onDoubleTap: _expandSheet,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
         child: Column(
@@ -794,31 +814,49 @@ class _MapRestaurantCard extends StatelessWidget {
   final bool selected;
   final MapSheetMode mode;
   final String? distanceLabel;
+  final BusinessHoursStatus? hoursStatus;
   final VoidCallback onTap;
   final VoidCallback onLocate;
-  final VoidCallback onVisitsTapped; 
+  final VoidCallback onVisitsTapped;
+  final VoidCallback onDeleteImported;
 
   const _MapRestaurantCard({
     required this.experience,
     required this.selected,
     required this.mode,
     required this.distanceLabel,
+    required this.hoursStatus,
     required this.onTap,
     required this.onLocate,
     required this.onVisitsTapped,
+    required this.onDeleteImported,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final imageUrl = experience.photoUrls.isEmpty ? null : experience.photoUrls.first;
-        
-    final bool isOpen = true;
+    final imageUrl =
+        experience.photoUrls.isEmpty ? null : experience.photoUrls.first;
+    final isOpen = hoursStatus?.isOpen;
+    final todayHours = hoursStatus?.todayLabel;
+    final statusLabel =
+        isOpen == null ? '時間未知' : (isOpen ? '營業中' : '休息中');
+    final statusColor = isOpen == null
+        ? colorScheme.onSurfaceVariant
+        : (isOpen ? Colors.green.shade700 : Colors.red.shade700);
+    final statusBackground = isOpen == null
+        ? colorScheme.surfaceContainerHighest
+        : (isOpen
+            ? Colors.green.withOpacity(0.15)
+            : Colors.red.withOpacity(0.15));
 
     final allExperiences = context.watch<SavedViewModel>().experiences;
-    final targetKey = experience.foodCardId ?? experience.placeId ?? experience.placeTitle;
-    final visitCount = allExperiences.where((e) => (e.foodCardId ?? e.placeId ?? e.placeTitle) == targetKey).length;
+    final targetKey =
+        experience.foodCardId ?? experience.placeId ?? experience.placeTitle;
+    final visitCount = allExperiences
+        .where((e) => (e.foodCardId ?? e.placeId ?? e.placeTitle) == targetKey)
+        .length;
 
     return AnimatedScale(
       scale: selected ? 1.006 : 1.0,
@@ -876,18 +914,37 @@ class _MapRestaurantCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 10),
+                      if (todayHours != null) ...[
+                        SizedBox(
+                          width: 66,
+                          child: Text(
+                            todayHours,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontSize: 9,
+                              height: 1.05,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
-                          color: isOpen 
-                              ? Colors.green.withOpacity(0.15) 
-                              : Colors.red.withOpacity(0.15),
+                          color: statusBackground,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          isOpen ? '營業中' : '休息中',
+                          statusLabel,
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: isOpen ? Colors.green.shade700 : Colors.red.shade700,
+                            color: statusColor,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1032,6 +1089,17 @@ class _MapRestaurantCard extends StatelessWidget {
                         ),
                         tooltip: 'Show on map',
                       ),
+                      if (mode == MapSheetMode.imported) ...[
+                        const SizedBox(height: 4),
+                        IconButton(
+                          onPressed: onDeleteImported,
+                          icon: Icon(
+                            Icons.remove_circle_outline,
+                            color: colorScheme.error,
+                          ),
+                          tooltip: 'Remove imported place',
+                        ),
+                      ],
                       if (visitCount > 0) ...[
                         const SizedBox(height: 4),
                         InkWell(

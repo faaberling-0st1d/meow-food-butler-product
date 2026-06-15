@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:meow_food_butler/models/experience_card.dart';
 import 'package:meow_food_butler/models/food_card.dart';
+import 'package:meow_food_butler/repositories/experience_repository.dart';
 import 'package:meow_food_butler/repositories/restaurant_repository.dart';
+import 'package:meow_food_butler/services/business_hours_service.dart';
 import 'package:meow_food_butler/services/current_map_position.dart';
 import 'package:meow_food_butler/services/distance_service.dart';
 import 'package:meow_food_butler/services/shared_url_notifier.dart';
@@ -565,6 +567,51 @@ class _MainMapScreenState extends State<MainMapScreen> {
     );
   }
 
+  FoodCard? _restaurantForExperience(
+    ExperienceCard experience,
+    List<FoodCard> restaurants,
+  ) {
+    final candidates = <String?>[
+      experience.foodCardId,
+      experience.placeId,
+      if (experience.id?.startsWith('restaurant-') == true)
+        experience.id!.replaceFirst('restaurant-', ''),
+    ]
+        .whereType<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    for (final restaurant in restaurants) {
+      final restaurantId = restaurant.id?.trim();
+      if (restaurantId != null && candidates.contains(restaurantId)) {
+        return restaurant;
+      }
+    }
+
+    final title = experience.placeTitle?.trim();
+    if (title == null || title.isEmpty) return null;
+    for (final restaurant in restaurants) {
+      final restaurantTitle = restaurant.primaryTitle.trim();
+      if (restaurantTitle == title ||
+          restaurantTitle.contains(title) ||
+          title.contains(restaurantTitle)) {
+        return restaurant;
+      }
+    }
+
+    return null;
+  }
+
+  BusinessHoursStatus? _hoursStatusFor(
+    ExperienceCard experience,
+    List<FoodCard> restaurants,
+  ) {
+    final restaurant = _restaurantForExperience(experience, restaurants);
+    final status = BusinessHoursService.status(restaurant?.workingHours);
+    return status.hasData ? status : null;
+  }
+
   double? _distanceMetersTo(ExperienceCard experience) {
     final currentLocation = _currentLocation;
     final latitude = experience.latitude;
@@ -693,7 +740,53 @@ class _MainMapScreenState extends State<MainMapScreen> {
     );
 
     if (showInfoWindow) {
-      await _mapController?.showMarkerInfoWindow( MarkerId('$markerId-selected'),);
+      await _mapController?.showMarkerInfoWindow(
+        MarkerId('$markerId-selected'),
+      );
+    }
+  }
+
+  Future<void> _deleteImportedExperience(
+    ExperienceCard experience,
+    List<FoodCard> restaurants,
+  ) async {
+    setState(() {
+      _importedCandidates.removeWhere(
+        (candidate) =>
+            _markerIdFor(candidate) == _markerIdFor(experience) ||
+            (candidate.originalURL != null &&
+                candidate.originalURL == experience.originalURL) ||
+            (candidate.placeTitle != null &&
+                candidate.placeTitle == experience.placeTitle),
+      );
+      if (_selectedExperienceId == _markerIdFor(experience)) {
+        _selectedExperienceId = null;
+      }
+    });
+
+    final restaurant = _restaurantForExperience(experience, restaurants);
+    final restaurantId = restaurant?.id ?? experience.foodCardId;
+
+    try {
+      if (restaurantId != null && restaurantId.trim().isNotEmpty) {
+        await RestaurantRepository().deleteRestaurant(restaurantId);
+      }
+      final experienceId = experience.id;
+      if (_isImportedExperience(experience) &&
+          experienceId != null &&
+          experienceId.isNotEmpty &&
+          !experienceId.startsWith('restaurant-')) {
+        await ExperienceRepository().deleteExperience(experience);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Imported place removed.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not remove imported place: $error')),
+      );
     }
   }
 
@@ -842,6 +935,8 @@ class _MainMapScreenState extends State<MainMapScreen> {
                 selectedExperienceId: _selectedExperienceId,
                 markerIdFor: _markerIdFor,
                 distanceLabelFor: _distanceLabelFor,
+                hoursStatusFor: (experience) =>
+                    _hoursStatusFor(experience, restaurants),
                 onModeChanged: (mode) {
                   setState(() {
                     _sheetMode = mode;
@@ -864,6 +959,8 @@ class _MainMapScreenState extends State<MainMapScreen> {
                   final query = Uri.encodeComponent(placeTitle);
                   context.go('/saved?q=$query');
                 },
+                onImportedDelete: (experience) =>
+                    _deleteImportedExperience(experience, restaurants),
               ),
               AnimatedBuilder(
                 animation: _sheetController,
