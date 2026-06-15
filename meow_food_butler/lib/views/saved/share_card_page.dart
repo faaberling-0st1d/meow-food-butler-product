@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
 
 class RestaurantCardData {
@@ -42,6 +43,40 @@ class _ShareCardPageState extends State<ShareCardPage> {
   static const _platform = MethodChannel('meow_food_butler/shared_text');
   final GlobalKey _cardKey = GlobalKey();
   bool _isSharing = false;
+  bool _isSaving = false;
+
+  Future<void> _saveToAlbum() async {
+    setState(() => _isSaving = true);
+    try {
+      final imageFile = await _captureCardImage();
+      if (imageFile == null) throw Exception('無法產生圖片');
+
+      final hasAccess = await Gal.hasAccess(toAlbum: true);
+      if (!hasAccess) {
+        final granted = await Gal.requestAccess(toAlbum: true);
+        if (!granted) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('需要相簿存取權限才能儲存圖片')),
+          );
+          return;
+        }
+      }
+
+      await Gal.putImage(imageFile.path, album: 'Meow Butler');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已儲存到相簿')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('儲存失敗：${e.toString()}')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
 
   Future<void> _shareToInstagramStory() async {
     setState(() {
@@ -132,12 +167,13 @@ class _ShareCardPageState extends State<ShareCardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F2ED),
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('Share Review Card'),
-        backgroundColor: const Color(0xFFF5F2ED),
-        foregroundColor: const Color(0xFF1A1A18),
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         elevation: 0,
       ),
       body: Center(
@@ -151,33 +187,64 @@ class _ShareCardPageState extends State<ShareCardPage> {
               ),
               const SizedBox(height: 24),
               SizedBox(
-                width: double.infinity,
                 height: 52,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF1D9E75),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: _isSharing ? null : _shareToInstagramStory,
-                  child: _isSharing
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFFFFF)),
-                            strokeWidth: 2.4,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        )
-                      : const Text(
+                          side: BorderSide(color: colorScheme.outline),
+                        ),
+                        onPressed: _isSaving ? null : _saveToAlbum,
+                        icon: _isSaving
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colorScheme.primary,
+                                ),
+                              )
+                            : const Icon(Icons.download_outlined),
+                        label: const Text(
+                          '儲存到相簿',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFF06B2B),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: _isSharing ? null : _shareToInstagramStory,
+                        icon: _isSharing
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFFFFF)),
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.send_outlined, color: Color(0xFFFFFFFF)),
+                        label: const Text(
                           '分享到 IG Story',
                           style: TextStyle(
                             color: Color(0xFFFFFFFF),
                             fontWeight: FontWeight.w700,
-                            fontSize: 16,
                           ),
                         ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -364,22 +431,18 @@ class _RestaurantShareCard extends StatelessWidget {
           const SizedBox(height: 18),
           Row(
             children: [
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1D9E75),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(
-                  Icons.pets,
-                  size: 14,
-                  color: Color(0xFFFFFFFF),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.asset(
+                  'assets/images/app_icon.png',
+                  width: 22,
+                  height: 22,
+                  fit: BoxFit.cover,
                 ),
               ),
               const SizedBox(width: 8),
               const Text(
-                'Meow Food Butler',
+                'Meow Butler',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
