@@ -660,7 +660,7 @@ class _RestaurantShareCard extends StatelessWidget {
   }
 }
 
-class _StoragePathImage extends StatelessWidget {
+class _StoragePathImage extends StatefulWidget {
   final String path;
   final double width;
   final double height;
@@ -676,29 +676,48 @@ class _StoragePathImage extends StatelessWidget {
   });
 
   @override
+  State<_StoragePathImage> createState() => _StoragePathImageState();
+}
+
+class _StoragePathImageState extends State<_StoragePathImage> {
+  late Future<String> _urlFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _urlFuture = FirebaseStorage.instance.ref(widget.path).getDownloadURL();
+  }
+
+  @override
+  void didUpdateWidget(_StoragePathImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.path != widget.path) {
+      _urlFuture = FirebaseStorage.instance.ref(widget.path).getDownloadURL();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<String>(
-      future: FirebaseStorage.instance.ref(path).getDownloadURL(),
+      future: _urlFuture,
       builder: (context, snapshot) {
         final url = snapshot.data;
         if (snapshot.connectionState != ConnectionState.done) {
           return SizedBox(
-            width: width,
-            height: height,
+            width: widget.width,
+            height: widget.height,
             child: const Center(child: CircularProgressIndicator()),
           );
         }
-        if (url == null) {
-          return fallback;
-        }
+        if (url == null) return widget.fallback;
         return Image.network(
           key: ValueKey(url),
           url,
-          width: width,
-          height: height,
-          fit: fit,
+          width: widget.width,
+          height: widget.height,
+          fit: widget.fit,
           webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-          errorBuilder: (context, error, stackTrace) => fallback,
+          errorBuilder: (context, error, stackTrace) => widget.fallback,
         );
       },
     );

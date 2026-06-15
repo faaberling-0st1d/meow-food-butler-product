@@ -15,6 +15,12 @@ import 'package:meow_food_butler/views/saved/widgets/experience_card_tile.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// Compiled once at startup; both are used inside hot-path build methods.
+final _kBulletMarker = RegExp(r'^\s*[-*•]\s+');
+final _kInlineMarkdownPattern = RegExp(
+  r'\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\*\*(.+?)\*\*|\*(.+?)\*',
+);
+
 class ChatScreen extends StatelessWidget {
   const ChatScreen({super.key});
 
@@ -301,7 +307,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
       return recognizer;
     }
 
-    final bulletMarker = RegExp(r'^\s*[-*•]\s+');
+    final bulletMarker = _kBulletMarker;
     final lines = text.split('\n');
     final rows = <Widget>[];
     for (final line in lines) {
@@ -881,9 +887,7 @@ List<InlineSpan> _parseInlineMarkdown(
   required GestureRecognizer Function(String url) onTapLink,
 }) {
   // Link `[label](http…)` first, then bold, then italic.
-  final pattern = RegExp(
-    r'\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\*\*(.+?)\*\*|\*(.+?)\*',
-  );
+  final pattern = _kInlineMarkdownPattern;
   final spans = <InlineSpan>[];
   var last = 0;
   for (final match in pattern.allMatches(text)) {
