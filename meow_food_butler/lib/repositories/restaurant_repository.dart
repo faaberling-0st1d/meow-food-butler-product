@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:meow_food_butler/models/experience_card.dart';
 import 'package:meow_food_butler/models/food_card.dart';
 
@@ -6,9 +8,11 @@ class RestaurantRepository {
   static const String _demoUid = 'demo-user';
 
   final FirebaseFirestore _firestore;
+  final FirebaseStorage _storage;
 
-  RestaurantRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  RestaurantRepository({FirebaseFirestore? firestore, FirebaseStorage? storage})
+      : _firestore = firestore ?? FirebaseFirestore.instance,
+        _storage = storage ?? FirebaseStorage.instance;
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('users').doc(_demoUid).collection('restaurants');
@@ -104,8 +108,14 @@ class RestaurantRepository {
         existingId == null ? _collection.doc(_safeDocumentId(restaurant)) : _collection.doc(existingId);
     final doc = await docRef.get();
 
+    // Mirror external (Outscraper/Google) photos into our own Storage once, so
+    // cards stay readable even after the source URLs rotate or expire.
+    final cached = await _cachePhotos(docRef.id, restaurant, doc.data());
+
     await docRef.set({
       ...restaurant.toMap(),
+      'photoPaths': cached.paths,
+      'photoUrls': cached.urls,
       'id': docRef.id,
       'placeId': restaurant.id,
       'createdTime': doc.exists
@@ -115,6 +125,74 @@ class RestaurantRepository {
     }, SetOptions(merge: true));
 
     return docRef.id;
+  }
+
+  /// Downloads any external photo URLs into Firebase Storage under
+  /// `users/{uid}/restaurants/{id}/photos/…` and returns the Storage paths +
+  /// download URLs. Idempotent: if the doc was already mirrored on a previous
+  /// save (it has `photoPaths`), the stored values are reused untouched. Any
+  /// download that fails (e.g. browser CORS on web) keeps its original URL as a
+  /// fallback so the card still renders.
+  Future<_CachedPhotos> _cachePhotos(
+    String docId,
+    FoodCard restaurant,
+    Map<String, dynamic>? existing,
+  ) async {
+    final existingPaths =
+        (existing?['photoPaths'] as List?)?.whereType<String>().toList() ??
+            const <String>[];
+    if (existingPaths.isNotEmpty) {
+      final existingUrls =
+          (existing?['photoUrls'] as List?)?.whereType<String>().toList() ??
+              const <String>[];
+      return _CachedPhotos(paths: existingPaths, urls: existingUrls);
+    }
+
+    final paths = <String>[];
+    final urls = <String>[];
+
+    for (var index = 0; index < restaurant.photoUrls.length; index += 1) {
+      final url = restaurant.photoUrls[index].trim();
+      if (url.isEmpty) continue;
+
+      // Already one of our Storage URLs — keep it without re-downloading.
+      if (url.contains('firebasestorage.googleapis.com')) {
+        urls.add(url);
+        continue;
+      }
+
+      try {
+        final response =
+            await http.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
+        if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+          urls.add(url);
+          continue;
+        }
+
+        final contentType = response.headers['content-type'] ?? 'image/jpeg';
+        final extension = contentType.contains('png')
+            ? 'png'
+            : contentType.contains('webp')
+                ? 'webp'
+                : 'jpg';
+        final path =
+            'users/$_demoUid/restaurants/$docId/photos/${DateTime.now().microsecondsSinceEpoch}_$index.$extension';
+        final ref = _storage.ref(path);
+
+        await ref.putData(
+          response.bodyBytes,
+          SettableMetadata(contentType: contentType),
+        );
+
+        paths.add(path);
+        urls.add(await ref.getDownloadURL());
+      } catch (_) {
+        // Network/CORS failure — fall back to the original external URL.
+        urls.add(url);
+      }
+    }
+
+    return _CachedPhotos(paths: paths, urls: urls);
   }
 
   Future<String?> _findExistingRestaurantId(FoodCard restaurant) async {
@@ -149,4 +227,11 @@ class RestaurantRepository {
     }
     return _collection.doc().id;
   }
+}
+
+class _CachedPhotos {
+  final List<String> paths;
+  final List<String> urls;
+
+  const _CachedPhotos({required this.paths, required this.urls});
 }

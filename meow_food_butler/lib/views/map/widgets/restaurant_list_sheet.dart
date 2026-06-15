@@ -158,14 +158,11 @@ class _RestaurantListSheetState extends State<RestaurantListSheet> {
       final restaurant =
           await repository.findForExperience(experience);
       if (restaurant != null) {
-        final enrichedRestaurant =
-            await _enrichRestaurantIfNeeded(restaurant, experience);
-        if (enrichedRestaurant != restaurant) {
-          await repository.saveRestaurant(enrichedRestaurant);
-        }
-        return _mergeRestaurantWithExperience(enrichedRestaurant, experience);
+        // Found in Firestore — use the stored card directly, no Outscraper call.
+        return _mergeRestaurantWithExperience(restaurant, experience);
       }
 
+      // Not in Firestore — fall back to Outscraper.
       final fetchedRestaurant = await _fetchRestaurantForExperience(experience);
       if (fetchedRestaurant != null) {
         await repository.saveRestaurant(fetchedRestaurant);
@@ -175,48 +172,6 @@ class _RestaurantListSheetState extends State<RestaurantListSheet> {
       // Fall back to the experience-only card when Firestore lookup fails.
     }
     return _foodCardFromExperience(experience);
-  }
-
-  Future<FoodCard> _enrichRestaurantIfNeeded(
-    FoodCard restaurant,
-    ExperienceCard experience,
-  ) async {
-    if (restaurant.reviewSnippets.isNotEmpty &&
-        restaurant.photoUrls.length >= 5 &&
-        restaurant.popularTimes != null) {
-      return restaurant;
-    }
-
-    final query = restaurant.primaryTitle.trim().isNotEmpty
-        ? restaurant.primaryTitle
-        : experience.placeTitle;
-    if (query == null || query.trim().isEmpty) return restaurant;
-
-    final service = OutscraperService();
-    final detail = restaurant.popularTimes == null
-        ? await service.fetchRestaurantDetail(query)
-        : null;
-    final baseRestaurant = detail ?? restaurant;
-    final reviews = restaurant.reviewSnippets.isNotEmpty
-        ? restaurant.reviewSnippets
-        : await service.fetchReviews(query, limit: 3);
-    final photoUrls = restaurant.photoUrls.length >= 5
-        ? restaurant.photoUrls
-        : _mergePhotoUrls(
-            _mergePhotoUrls(restaurant.photoUrls, baseRestaurant.photoUrls),
-            (await service.fetchPhotos(query, tag: 'menu', photosLimit: 5))
-                .map((photoMap) => photoMap['url'] as String? ?? '')
-                .where((url) => url.isNotEmpty)
-                .toList(),
-          );
-
-    return baseRestaurant.copyForImport(
-      originalURL: restaurant.originalURL,
-      visited: restaurant.visited,
-      tags: restaurant.tags,
-      photoUrls: photoUrls,
-      reviewSnippets: reviews,
-    );
   }
 
   Future<FoodCard?> _fetchRestaurantForExperience(
