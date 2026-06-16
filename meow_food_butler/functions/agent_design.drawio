@@ -1,0 +1,115 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Agentic Design — Meow Food Butler" id="meow-agentic-map">
+    <mxGraphModel dx="1134" dy="704" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;fontSize=30;fontStyle=1;align=left;verticalAlign=middle;" value="Agentic Design — Meow Food Butler" vertex="1">
+          <mxGeometry height="50" width="800" x="60" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="in-user" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#70AD47;strokeColor=#507E32;fontColor=#FFFFFF;fontSize=14;fontStyle=1;" value="User&#xa;(Flutter chat UI → chatWithButler)" vertex="1">
+          <mxGeometry height="60" width="240" x="340" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="in-ext" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#70AD47;strokeColor=#507E32;fontColor=#FFFFFF;fontSize=14;fontStyle=1;" value="Ext. event&#xa;(Instagram link parsing)" vertex="1">
+          <mxGeometry height="60" width="240" x="340" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="in-hb" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#C9C9C9;strokeColor=#9A9A9A;fontColor=#5A5A5A;fontSize=13;dashed=1;" value="Heartbeat&#xa;(not implemented)" vertex="1">
+          <mxGeometry height="50" width="240" x="340" y="570" as="geometry" />
+        </mxCell>
+        <mxCell id="in-cron" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#C9C9C9;strokeColor=#9A9A9A;fontColor=#5A5A5A;fontSize=13;dashed=1;" value="Cron&#xa;(not implemented)" vertex="1">
+          <mxGeometry height="50" width="240" x="340" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="in-int" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#C9C9C9;strokeColor=#9A9A9A;fontColor=#5A5A5A;fontSize=13;dashed=1;" value="Int. event&#xa;(not implemented)" vertex="1">
+          <mxGeometry height="50" width="240" x="340" y="690" as="geometry" />
+        </mxCell>
+        <mxCell id="queue" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#FFFFFF;strokeColor=#000000;" value="" vertex="1">
+          <mxGeometry height="40" width="120" x="610" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="queue-lbl" parent="1" style="text;html=1;align=center;verticalAlign=top;fontSize=12;" value="Msg + sess. ID&#xa;(prompt + sessionId — required)" vertex="1">
+          <mxGeometry height="40" width="200" x="570" y="542" as="geometry" />
+        </mxCell>
+        <mxCell id="cap-tools" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2E528F;fontColor=#FFFFFF;fontSize=14;fontStyle=1;" value="Tools&#xa;(Genkit defineTool)" vertex="1">
+          <mxGeometry height="120" width="180" x="700" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="cap-skills" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2E528F;fontColor=#FFFFFF;fontSize=12;fontStyle=1;" value="Skills (9)&#xa;searchSpots · searchMyPlaces&#xa;viewDiningLog · findFreeTime&#xa;routeDistance · draftExperience&#xa;recallMemory · remember · forget" vertex="1">
+          <mxGeometry height="120" width="220" x="890" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="cap-sub" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2E528F;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" value="Sub-agents&#xa;(L1 Planning → L2 Execution&#xa;in-prompt routing)" vertex="1">
+          <mxGeometry height="120" width="200" x="1120" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="runtime" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F8CBAD;strokeColor=#C18A5E;fontColor=#000000;fontSize=15;fontStyle=1;verticalAlign=top;spacingTop=8;" value="Runtime — runButlerFlow / generateAcrossKeys" vertex="1">
+          <mxGeometry height="320" width="360" x="760" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="rt-sys" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ED7D31;strokeColor=#B85C1E;fontColor=#FFFFFF;fontSize=12;fontStyle=1;" value="Sys. prompt — buildSystem()&#xa;(persona + clock + recalled memory)" vertex="1">
+          <mxGeometry height="55" width="310" x="785" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="rt-meta" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ED7D31;strokeColor=#B85C1E;fontColor=#FFFFFF;fontSize=12;fontStyle=1;" value="Metadata — MODEL (gemini-2.5-flash),&#xa;asia-east1, key rotation (getGeminiKeys)" vertex="1">
+          <mxGeometry height="55" width="310" x="785" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="rt-ctx3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ED7D31;strokeColor=#B85C1E;" value="" vertex="1">
+          <mxGeometry height="90" width="290" x="805" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="rt-ctx2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ED7D31;strokeColor=#B85C1E;" value="" vertex="1">
+          <mxGeometry height="90" width="290" x="795" y="550" as="geometry" />
+        </mxCell>
+        <mxCell id="rt-ctx1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ED7D31;strokeColor=#B85C1E;fontColor=#FFFFFF;fontSize=12;fontStyle=1;" value="Context — reqContext + history&#xa;(location · now · userId · sessionId&#xa;· actions · last 10 turns · recalled)" vertex="1">
+          <mxGeometry height="90" width="290" x="785" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="llm" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#A6A6A6;strokeColor=#7F7F7F;fontColor=#FFFFFF;fontSize=14;fontStyle=1;" value="LLM&#xa;Gemini 2.5-Flash&#xa;instance.generate()" vertex="1">
+          <mxGeometry height="140" width="200" x="1150" y="427.5" as="geometry" />
+        </mxCell>
+        <mxCell id="memory" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#FFC000;strokeColor=#BF9000;fontColor=#000000;fontSize=12;fontStyle=1;verticalAlign=bottom;" value="Memory&#xa;RAG store (embed/remember/recall/forget)&#xa;+ session history (Firestore)" vertex="1">
+          <mxGeometry height="90" width="320" x="770" y="690" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="in-user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" target="queue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="in-ext" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" target="queue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="in-hb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;dashed=1;strokeColor=#9A9A9A;" target="queue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="in-cron" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;dashed=1;strokeColor=#9A9A9A;" target="queue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="in-int" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;dashed=1;strokeColor=#9A9A9A;" target="queue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="queue" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" target="runtime">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="cap-tools" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" target="runtime">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="790" y="330" />
+              <mxPoint x="940" y="330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="cap-skills" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" target="runtime">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1000" y="330" />
+              <mxPoint x="940" y="330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="cap-sub" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" target="runtime">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1220" y="330" />
+              <mxPoint x="940" y="330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="llm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;startArrow=block;startFill=1;endArrow=block;endFill=1;strokeWidth=2;" target="rt-meta">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="memory" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" target="rt-ctx1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -185,54 +185,60 @@ class _ChatState extends State<Chat> {
                     ),
                   );
                 }
-                return ListView.builder(
-                  reverse: true,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 12,
-                  ),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final Widget bubble;
-                    if (message.type == ChatMessageType.experienceCard &&
-                        message.experienceId != null) {
-                      bubble = _ExperienceCardBubble(
-                        experienceId: message.experienceId!,
-                      );
-                    } else if (message.type ==
-                            ChatMessageType.restaurantCards &&
-                        message.recommendedSpotIds?.isNotEmpty == true) {
-                      bubble = _RestaurantCardsBubbleV2(
-                        restaurantIds: message.recommendedSpotIds!,
-                      );
-                    } else {
-                      bubble = _MessageBubble(
-                        text: message.text,
-                        isMe: message.role == 'user',
-                        timestamp: message.timestamp,
-                      );
-                    }
+                // Wrap in a SelectionArea so message text can be selected and
+                // copied (drag-select + Ctrl+C / right-click). Tappable inline
+                // links inside the bubbles keep working.
+                return SelectionArea(
+                  child: ListView.builder(
+                    reverse: true,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 12,
+                    ),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final message = messages[index];
+                      final Widget bubble;
+                      if (message.type == ChatMessageType.experienceCard &&
+                          message.experienceId != null) {
+                        bubble = _ExperienceCardBubble(
+                          experienceId: message.experienceId!,
+                        );
+                      } else if (message.type ==
+                              ChatMessageType.restaurantCards &&
+                          message.recommendedSpotIds?.isNotEmpty == true) {
+                        bubble = _RestaurantCardsBubbleV2(
+                          restaurantIds: message.recommendedSpotIds!,
+                        );
+                      } else {
+                        bubble = _MessageBubble(
+                          text: message.text,
+                          isMe: message.role == 'user',
+                          timestamp: message.timestamp,
+                        );
+                      }
 
-                    // The list is reversed, so the next-older message sits at
-                    // index + 1. Show a date separator above this bubble when it
-                    // opens a new day (or it's the very first message).
-                    final older = index + 1 < messages.length
-                        ? messages[index + 1]
-                        : null;
-                    final startsNewDay = older == null ||
-                        !_isSameDay(message.timestamp, older.timestamp);
-                    if (!startsNewDay) return bubble;
-                    return Column(
-                      // Stretch so the bubble keeps its own left/right
-                      // alignment; the date chip centers itself.
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _DateSeparator(timestamp: message.timestamp),
-                        bubble,
-                      ],
-                    );
-                  },
+                      // The list is reversed, so the next-older message sits at
+                      // index + 1. Show a date separator above this bubble when it
+                      // opens a new day (or it's the very first message).
+                      final older = index + 1 < messages.length
+                          ? messages[index + 1]
+                          : null;
+                      final startsNewDay =
+                          older == null ||
+                          !_isSameDay(message.timestamp, older.timestamp);
+                      if (!startsNewDay) return bubble;
+                      return Column(
+                        // Stretch so the bubble keeps its own left/right
+                        // alignment; the date chip centers itself.
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _DateSeparator(timestamp: message.timestamp),
+                          bubble,
+                        ],
+                      );
+                    },
+                  ),
                 );
               },
             ),
@@ -377,8 +383,9 @@ class _MessageBubbleState extends State<_MessageBubble> {
     );
 
     return Column(
-      crossAxisAlignment:
-          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: isMe
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         Container(
           constraints: BoxConstraints(
@@ -428,8 +435,18 @@ bool _isSameDay(Timestamp a, Timestamp b) {
 }
 
 const _monthNames = <String>[
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 /// Formats a message [timestamp] as an absolute date (e.g. `15 June 2026`) in
