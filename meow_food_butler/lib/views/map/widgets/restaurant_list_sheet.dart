@@ -205,44 +205,33 @@ class _RestaurantListSheetState extends State<RestaurantListSheet> {
   Future<FoodCard?> _fetchRestaurantForExperience(
     ExperienceCard experience,
   ) async {
-    // Lookup priority:
-    //   1. placeId (exact Google place) → converts to Maps URL on backend
-    //   2. googleMapsUrl (user's saved Maps link) → Outscraper resolves exact place
-    //   3. text query = "name, address" for more specific fuzzy search
     final placeId = _usablePlaceId(experience.placeId);
     final mapsUrl = experience.googleMapsUrl?.trim();
 
-    final String? effectivePlaceId;
-    final String? effectiveQuery;
-
+    // Only call Outscraper when we have a precise identifier.
+    // A text-only query (name + address) is too unreliable: it can match
+    // unrelated restaurants, especially when tags are sent as context.
     if (placeId != null && placeId.isNotEmpty) {
-      effectivePlaceId = placeId;
-      effectiveQuery = experience.placeTitle?.trim();
-    } else if (mapsUrl != null && mapsUrl.isNotEmpty) {
-      // A Maps URL is precise enough to act as placeId
-      effectivePlaceId = mapsUrl;
-      effectiveQuery = experience.placeTitle?.trim();
-    } else {
-      effectivePlaceId = null;
-      // Include address so Outscraper can disambiguate (e.g. "Ginzeng, 水木餐廳 Hsinchu")
-      final parts = [
-        experience.placeTitle?.trim(),
-        experience.placeAddress?.trim(),
-      ].whereType<String>().where((s) => s.isNotEmpty).toList();
-      effectiveQuery = parts.isNotEmpty ? parts.join(', ') : null;
+      return RestaurantLookupService().fetch(
+        placeId: placeId,
+        query: experience.placeTitle?.trim(),
+        originalURL: experience.originalURL,
+        tags: experience.personalTags,
+        visited: experience.isDone,
+      );
     }
 
-    if (effectivePlaceId == null && (effectiveQuery == null || effectiveQuery.isEmpty)) {
-      return null;
+    if (mapsUrl != null && mapsUrl.isNotEmpty) {
+      return RestaurantLookupService().fetch(
+        placeId: mapsUrl,
+        query: experience.placeTitle?.trim(),
+        originalURL: experience.originalURL,
+        tags: experience.personalTags,
+        visited: experience.isDone,
+      );
     }
 
-    return RestaurantLookupService().fetch(
-      placeId: effectivePlaceId,
-      query: effectiveQuery,
-      originalURL: experience.originalURL,
-      tags: experience.personalTags,
-      visited: experience.isDone,
-    );
+    return null;
   }
 
   String? _usablePlaceId(String? value) {

@@ -162,39 +162,34 @@ class SavedViewModel extends ChangeNotifier {
     }
   }
 
-  /// Resolves lookup priority: placeId → googleMapsUrl → name + address query.
+  /// Resolves lookup priority: placeId → googleMapsUrl → skip.
+  /// Text-only queries (name + address) are intentionally excluded: they are
+  /// unreliable and can match unrelated restaurants when tags are sent as context.
   Future<FoodCard?> _fetchForExperience(ExperienceCard experience) async {
     final placeId = _usablePlaceId(experience.placeId);
     final mapsUrl = experience.googleMapsUrl?.trim();
 
-    final String? effectivePlaceId;
-    final String? effectiveQuery;
-
     if (placeId != null && placeId.isNotEmpty) {
-      effectivePlaceId = placeId;
-      effectiveQuery = experience.placeTitle?.trim();
-    } else if (mapsUrl != null && mapsUrl.isNotEmpty) {
-      effectivePlaceId = mapsUrl;
-      effectiveQuery = experience.placeTitle?.trim();
-    } else {
-      effectivePlaceId = null;
-      final parts = [experience.placeTitle?.trim(), experience.placeAddress?.trim()]
-          .whereType<String>()
-          .where((s) => s.isNotEmpty)
-          .toList();
-      effectiveQuery = parts.isNotEmpty ? parts.join(', ') : null;
+      return RestaurantLookupService().fetch(
+        placeId: placeId,
+        query: experience.placeTitle?.trim(),
+        originalURL: experience.originalURL,
+        tags: experience.personalTags,
+        visited: experience.isDone,
+      );
     }
 
-    if (effectivePlaceId == null &&
-        (effectiveQuery == null || effectiveQuery.isEmpty)) return null;
+    if (mapsUrl != null && mapsUrl.isNotEmpty) {
+      return RestaurantLookupService().fetch(
+        placeId: mapsUrl,
+        query: experience.placeTitle?.trim(),
+        originalURL: experience.originalURL,
+        tags: experience.personalTags,
+        visited: experience.isDone,
+      );
+    }
 
-    return RestaurantLookupService().fetch(
-      placeId: effectivePlaceId,
-      query: effectiveQuery,
-      originalURL: experience.originalURL,
-      tags: experience.personalTags,
-      visited: experience.isDone,
-    );
+    return null;
   }
 
   String? _usablePlaceId(String? value) {
