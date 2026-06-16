@@ -80,14 +80,12 @@ class RestaurantRepository {
   }
 
   Future<List<FoodCard>> restaurantsByIds(List<String> ids) async {
-    final restaurants = <FoodCard>[];
-    for (final id in ids) {
-      final doc = await _collection.doc(id).get();
-      if (doc.exists && doc.data() != null) {
-        restaurants.add(FoodCard.fromMap(doc.data()!, doc.id));
-      }
-    }
-    return restaurants;
+    if (ids.isEmpty) return const [];
+    final docs = await Future.wait(ids.map((id) => _collection.doc(id).get()));
+    return docs
+        .where((doc) => doc.exists && doc.data() != null)
+        .map((doc) => FoodCard.fromMap(doc.data()!, doc.id))
+        .toList();
   }
 
   Future<FoodCard?> findForExperience(ExperienceCard experience) async {
@@ -227,48 +225,54 @@ class RestaurantRepository {
       return _CachedPhotos(paths: existingPaths, urls: existingUrls);
     }
 
-    final paths = <String>[];
-    final urls = <String>[];
+    // Download and upload all photos in parallel; preserve order via index.
+    final results = await Future.wait(
+      restaurant.photoUrls.asMap().entries.map((entry) async {
+        final index = entry.key;
+        final url = entry.value.trim();
+        if (url.isEmpty) return (path: null, url: null);
 
-    for (var index = 0; index < restaurant.photoUrls.length; index += 1) {
-      final url = restaurant.photoUrls[index].trim();
-      if (url.isEmpty) continue;
-
-      // Already one of our Storage URLs — keep it without re-downloading.
-      if (url.contains('firebasestorage.googleapis.com')) {
-        urls.add(url);
-        continue;
-      }
-
-      try {
-        final response =
-            await http.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
-        if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
-          urls.add(url);
-          continue;
+        if (url.contains('firebasestorage.googleapis.com')) {
+          return (path: null, url: url);
         }
 
-        final contentType = response.headers['content-type'] ?? 'image/jpeg';
-        final extension = contentType.contains('png')
-            ? 'png'
-            : contentType.contains('webp')
-                ? 'webp'
-                : 'jpg';
-        final path =
-            'users/$_demoUid/restaurants/$docId/photos/${DateTime.now().microsecondsSinceEpoch}_$index.$extension';
-        final ref = _storage.ref(path);
+        try {
+          final response = await http
+              .get(Uri.parse(url))
+              .timeout(const Duration(seconds: 20));
+          if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+            return (path: null, url: url);
+          }
 
-        await ref.putData(
-          response.bodyBytes,
-          SettableMetadata(contentType: contentType),
-        );
+          final contentType =
+              response.headers['content-type'] ?? 'image/jpeg';
+          final extension = contentType.contains('png')
+              ? 'png'
+              : contentType.contains('webp')
+                  ? 'webp'
+                  : 'jpg';
+          final path =
+              'users/$_demoUid/restaurants/$docId/photos/${DateTime.now().microsecondsSinceEpoch}_$index.$extension';
+          final ref = _storage.ref(path);
 
-        paths.add(path);
-        urls.add(await ref.getDownloadURL());
-      } catch (_) {
-        // Network/CORS failure — fall back to the original external URL.
-        urls.add(url);
-      }
+          await ref.putData(
+            response.bodyBytes,
+            SettableMetadata(contentType: contentType),
+          );
+
+          return (path: path, url: await ref.getDownloadURL());
+        } catch (_) {
+          return (path: null, url: url);
+        }
+      }),
+    );
+
+    final paths = <String>[];
+    final urls = <String>[];
+    for (final r in results) {
+      if (r.url == null) continue;
+      if (r.path != null) paths.add(r.path!);
+      urls.add(r.url!);
     }
 
     return _CachedPhotos(paths: paths, urls: urls);

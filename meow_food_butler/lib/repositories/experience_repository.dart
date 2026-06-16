@@ -20,27 +20,25 @@ class ExperienceRepository {
     return _collection
         .orderBy('createdTime', descending: true)
         .snapshots()
-        .asyncMap((snapshot) async {
-          final experiences = <ExperienceCard>[];
-
-          for (final doc in snapshot.docs) {
-            var experience = ExperienceCard.fromMap(doc.data(), doc.id);
-            if (experience.photoUrls.isEmpty &&
-                experience.photoPaths.isNotEmpty) {
-              final urls = await _downloadUrlsFor(experience.photoPaths);
-              if (urls.isNotEmpty) {
-                experience = experience.copyWith(photoUrls: urls);
-                await doc.reference.update({
-                  'photoUrls': urls,
-                  'updatedTime': FieldValue.serverTimestamp(),
-                });
+        .asyncMap(
+          (snapshot) => Future.wait(
+            snapshot.docs.map((doc) async {
+              var experience = ExperienceCard.fromMap(doc.data(), doc.id);
+              if (experience.photoUrls.isEmpty &&
+                  experience.photoPaths.isNotEmpty) {
+                final urls = await _downloadUrlsFor(experience.photoPaths);
+                if (urls.isNotEmpty) {
+                  experience = experience.copyWith(photoUrls: urls);
+                  await doc.reference.update({
+                    'photoUrls': urls,
+                    'updatedTime': FieldValue.serverTimestamp(),
+                  });
+                }
               }
-            }
-            experiences.add(experience);
-          }
-
-          return experiences;
-        });
+              return experience;
+            }),
+          ),
+        );
   }
 
   Future<ExperienceCard> addExperience(
@@ -138,16 +136,18 @@ class ExperienceRepository {
     return _UploadedPhotos(paths: paths, urls: urls);
   }
 
+  // Fetches all Storage download URLs in parallel instead of sequentially.
   Future<List<String>> _downloadUrlsFor(List<String> paths) async {
-    final urls = <String>[];
-    for (final path in paths) {
-      try {
-        urls.add(await _storage.ref(path).getDownloadURL());
-      } on FirebaseException {
-        // Ignore broken legacy paths; the UI will keep the placeholder.
-      }
-    }
-    return urls;
+    final results = await Future.wait(
+      paths.map((path) async {
+        try {
+          return await _storage.ref(path).getDownloadURL();
+        } on FirebaseException {
+          return null;
+        }
+      }),
+    );
+    return results.whereType<String>().toList();
   }
 
   String _extensionFor(String fileName) {
